@@ -1,119 +1,77 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-import qrcode
-from io import BytesIO
-from datetime import datetime, date
-import hashlib
+import plotly.graph_objects as go
+from datetime import datetime, timedelta
 import random
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, ForeignKey, Date
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-import os
 
 # ========================== НАСТРОЙКА СТРАНИЦЫ ==========================
 st.set_page_config(
     page_title="Цифровая история назначений",
-    page_icon=":medical_symbol:",
+    page_icon="🏥",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
+# ========================== CSS ДЛЯ ПРОФЕССИОНАЛЬНОГО МЕДИЦИНСКОГО ИНТЕРФЕЙСА ==========================
 st.markdown("""
 <style>
-    /* Принудительно белый фон везде */
-    .stApp, .stApp > header, .stApp > div {
-        background-color: #FFFFFF !important;
-    }
-    /* Все тексты и метки — чёрные */
-    body, .stMarkdown, label, .stTextInput label, .stSelectbox label, .stNumberInput label, .stTextArea label, .stDateInput label, .stCheckbox label, .stCaption, .stAlert {
-        color: #111827 !important;
-    }
-    /* Поля ввода — белые, текст чёрный */
-    .stTextInput input, .stSelectbox div[data-baseweb="select"] > div, .stNumberInput input, .stTextArea textarea, .stDateInput input {
-        background-color: #FFFFFF !important;
-        color: #111827 !important;
-        border: 1px solid #D1D5DB !important;
-        border-radius: 8px !important;
-    }
-    /* Выпадающие списки */
-    .stSelectbox div[data-baseweb="select"] ul {
-        background-color: #FFFFFF !important;
-        color: #111827 !important;
-    }
-    /* Кнопки — синий фон, белый текст */
-    .stButton button {
-        background-color: #3B82F6 !important;
-        color: #FFFFFF !important;
-        border-radius: 8px !important;
-        border: none !important;
-        font-weight: 500 !important;
-    }
-    .stButton button:hover {
-        background-color: #2563EB !important;
-    }
-    /* Карточки и прочие блоки (не меняйте, если всё устраивает) */
-    .card, .metric-card {
-        background-color: #F9FAFB !important;
-        color: #111827 !important;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# ========================== CSS ДЛЯ ПРОФЕССИОНАЛЬНОГО ВИДА ==========================
-st.markdown("""
-<style>
-    /* Общий фон и шрифт */
+    /* ОСНОВНЫЕ ЦВЕТА */
     .stApp {
-        background-color: #FFFFFF;
+        background-color: #F7F9FC;
     }
-    html, body, [data-testid="stAppViewContainer"] {
-        background-color: #FFFFFF;
-    }
-    .main-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 1rem 2rem;
-        border-bottom: 1px solid #E5E7EB;
-        background-color: #FFFFFF;
-    }
-    .logo-title {
-        font-size: 1.5rem;
-        font-weight: 700;
-        color: #111827;
-        text-decoration: none;
-        margin-left: 0;
-    }
-    .user-info {
-        font-size: 0.9rem;
-        color: #4B5563;
+    /* Все тексты по умолчанию тёмные */
+    html, body, [data-testid="stAppViewContainer"], .stMarkdown, label, .stTextInput label, .stSelectbox label {
+        color: #1F2A3E !important;
+        background-color: #F7F9FC;
     }
     /* Карточки */
     .card {
-        background-color: #F9FAFB;
-        border-radius: 12px;
+        background-color: #FFFFFF;
+        border-radius: 16px;
         padding: 1.5rem;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        margin-bottom: 1rem;
-        border: 1px solid #E5E7EB;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        border: 1px solid #E8ECF0;
     }
+    .card-header {
+        font-size: 1.2rem;
+        font-weight: 600;
+        color: #1F2A3E;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 2px solid #3B82F6;
+        display: inline-block;
+    }
+    /* Метрики */
     .metric-card {
-        background-color: #F9FAFB;
+        background: #FFFFFF;
         border-radius: 12px;
         padding: 1rem;
         text-align: center;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         border-left: 4px solid #3B82F6;
         margin-bottom: 1rem;
     }
     .metric-value {
         font-size: 2rem;
         font-weight: 700;
-        color: #111827;
+        color: #1F2A3E;
     }
     .metric-label {
         font-size: 0.85rem;
-        color: #6B7280;
+        color: #6C757D;
+    }
+    /* Кнопки */
+    .stButton button {
+        background-color: #3B82F6 !important;
+        color: #FFFFFF !important;
+        border-radius: 12px !important;
+        border: none !important;
+        padding: 0.5rem 1.5rem !important;
+        font-weight: 500 !important;
+    }
+    .stButton button:hover {
+        background-color: #2563EB !important;
     }
     /* Таблицы */
     table {
@@ -121,413 +79,290 @@ st.markdown("""
         border-collapse: collapse;
     }
     th {
-        background-color: #F3F4F6;
-        color: #111827;
+        background-color: #F0F2F5;
+        color: #1F2A3E;
         padding: 0.75rem;
         text-align: left;
-        font-weight: 600;
     }
     td {
         padding: 0.75rem;
-        border-bottom: 1px solid #E5E7EB;
-        color: #111827;
+        border-bottom: 1px solid #E8ECF0;
+        color: #1F2A3E;
     }
-    /* Предупреждения */
-    .alert-warning {
-        background-color: #FEF3C7;
-        border-left: 4px solid #F59E0B;
-        padding: 1rem;
-        border-radius: 8px;
-        color: #92400E;
+    /* Чекбоксы */
+    .stCheckbox label {
+        color: #1F2A3E !important;
+    }
+    /* Радио-кнопки */
+    .stRadio label {
+        color: #1F2A3E !important;
+    }
+    /* Инпуты */
+    .stTextInput input, .stSelectbox div[data-baseweb="select"] > div {
+        background-color: #FFFFFF !important;
+        color: #1F2A3E !important;
+        border: 1px solid #D1D9E8 !important;
+        border-radius: 8px !important;
+    }
+    /* Заголовки */
+    h1, h2, h3, h4, h5, h6 {
+        color: #1F2A3E !important;
+    }
+    /* Разделители */
+    hr {
         margin: 1rem 0;
-    }
-    .alert-danger {
-        background-color: #FEE2E2;
-        border-left: 4px solid #EF4444;
-        padding: 1rem;
-        border-radius: 8px;
-        color: #991B1B;
-        margin: 1rem 0;
-    }
-    .alert-success {
-        background-color: #D1FAE5;
-        border-left: 4px solid #22C55E;
-        padding: 1rem;
-        border-radius: 8px;
-        color: #065F46;
-        margin: 1rem 0;
-    }
-    .status-badge {
-        display: inline-block;
-        padding: 0.25rem 0.75rem;
-        border-radius: 20px;
-        font-size: 0.75rem;
-        font-weight: 600;
-    }
-    .status-low {
-        background-color: #D1FAE5;
-        color: #065F46;
-    }
-    .status-medium {
-        background-color: #FEF3C7;
-        color: #92400E;
-    }
-    .status-high {
-        background-color: #FEE2E2;
-        color: #991B1B;
+        border-color: #E8ECF0;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# ========================== БАЗА ДАННЫХ ==========================
-DB_PATH = os.path.join(os.path.dirname(__file__), "prescriptions.db")
-engine = create_engine(f'sqlite:///{DB_PATH}', echo=False)
-Base = declarative_base()
-SessionLocal = sessionmaker(bind=engine)
+# ========================== ДАННЫЕ ДЛЯ ДЕМОНСТРАЦИИ ==========================
+def get_health_data():
+    dates = [(datetime.now() - timedelta(days=i)).strftime("%d.%m") for i in range(7, -1, -1)]
+    systolic = [118, 120, 122, 125, 119, 121, 118, 117]
+    diastolic = [76, 78, 79, 81, 77, 78, 76, 75]
+    pulse = [72, 74, 73, 75, 72, 73, 71, 70]
+    temperature = [36.6, 36.5, 36.7, 36.6, 36.4, 36.6, 36.5, 36.6]
+    return dates, systolic, diastolic, pulse, temperature
 
-class User(Base):
-    __tablename__ = 'users'
-    id = Column(Integer, primary_key=True)
-    username = Column(String, unique=True)
-    password = Column(String)
-    role = Column(String)
-    full_name = Column(String)
+def get_medications():
+    return [
+        {"name": "Энап", "dosage": "5 мг", "form": "таблетки", "quantity": 60, "time": "08:00, 13:05", "food": "За 15 мин до еды", "start": "06.07.2020", "end": "15.07.2020", "reason": "Повышенное артериальное давление", "special": "Измерять пульс и АД"},
+        {"name": "Аспирин Кардио", "dosage": "300 мг", "form": "таблетки кишечнорастворимые", "quantity": 20, "time": "17:16", "food": "Не указано", "start": "06.07.2020", "end": "15.07.2020", "reason": "Профилактика тромбозов", "special": "Не принимать натощак"}
+    ]
 
-class Patient(Base):
-    __tablename__ = 'patients'
-    id = Column(Integer, primary_key=True)
-    first_name = Column(String)
-    last_name = Column(String)
-    birth_date = Column(Date)
-    policy_number = Column(String, unique=True)
-    allergies = Column(Text)
+def get_recommendations():
+    return {
+        "Питание": ["Ограничить соль", "Больше овощей", "Пить 1.5-2 л воды"],
+        "Физические нагрузки": ["Ходьба 30 мин/день", "ЛФК по рекомендации"],
+        "Ограничения": ["Алкоголь", "Курение", "Острые блюда"],
+        "Прием препаратов": ["Ежедневно в одно время", "Не пропускать"],
+        "Диагностика": ["ЭКГ 1 раз в месяц", "Анализ крови"]
+    }
 
-class Prescription(Base):
-    __tablename__ = 'prescriptions'
-    id = Column(Integer, primary_key=True)
-    patient_id = Column(Integer, ForeignKey('patients.id'))
-    doctor_id = Column(Integer, ForeignKey('users.id'))
-    created_at = Column(DateTime, default=datetime.now)
-    status = Column(String, default='active')
-    qr_token = Column(String, unique=True)
+def get_migraine_questions():
+    return {
+        "headache": "Была ли у Вас сегодня головная боль?",
+        "aura": "Были ли зрительные нарушения (вспышка, слепые пятна)?",
+        "location": "Где болела голова?",
+        "character": "Какой был характер боли?",
+        "physical": "Усиливалась ли боль при физической нагрузке?"
+    }
 
-class PrescriptionItem(Base):
-    __tablename__ = 'prescription_items'
-    id = Column(Integer, primary_key=True)
-    prescription_id = Column(Integer, ForeignKey('prescriptions.id'))
-    drug_name = Column(String)
-    dosage = Column(String)
-    quantity = Column(Integer)
-    is_dispensed = Column(Boolean, default=False)
+# ========================== СТРАНИЦА ПАЦИЕНТА (полный функционал) ==========================
+def patient_dashboard():
+    st.markdown('<div class="logo-title">Цифровая история назначений</div>', unsafe_allow_html=True)
+    
+    # Верхнее меню
+    tabs = st.tabs(["Главная", "Мои назначения", "Дневник здоровья", "Дневник мигрени", "Рекомендации"])
+    
+    # ========== ВКЛАДКА 1: ГЛАВНАЯ ==========
+    with tabs[0]:
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            st.markdown('<div class="card"><div class="card-header">Сегодня, {}</div>'.format(datetime.now().strftime("%d.%m.%Y")), unsafe_allow_html=True)
+            for med in get_medications():
+                st.markdown(f"""
+                <div style="background:#FFFFFF; padding:1rem; border-radius:12px; margin-bottom:0.8rem; box-shadow:0 1px 2px rgba(0,0,0,0.05);">
+                    <div style="font-weight:600;">{med['name']}, {med['dosage']}, {med['form']}, {med['quantity']} шт.</div>
+                    <div style="font-size:0.85rem; color:#6C757D;">Требуется рецепт</div>
+                    <label style="display:flex; align-items:center; margin-top:0.5rem;">
+                        <input type="checkbox"> <span style="margin-left:0.5rem;">Купить лекарство со скидкой</span>
+                    </label>
+                    <div style="margin-top:0.5rem;"><a href="#" style="color:#3B82F6;">Информация о препарате</a></div>
+                </div>
+                """, unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown('<div class="card"><div class="card-header">График выполнения</div>', unsafe_allow_html=True)
+            st.markdown("Ежедневно в 08:00, 13:05")
+            st.markdown("За 0 час(а) 15 минут(ы) до приема пищи")
+            st.markdown("**Дата начала:** 06.07.2020")
+            st.markdown("**Дата окончания:** 15.07.2020")
+            st.markdown("**Причина:** Повышенное артериальное давление")
+            st.markdown("**Особые указания:** Измерять пульс и АД")
+            st.markdown('</div>', unsafe_allow_html=True)
+    
+    # ========== ВКЛАДКА 2: МОИ НАЗНАЧЕНИЯ ==========
+    with tabs[1]:
+        st.markdown('<div class="card"><div class="card-header">Активные назначения</div>', unsafe_allow_html=True)
+        for med in get_medications():
+            col1, col2 = st.columns([3,1])
+            with col1:
+                st.markdown(f"**{med['name']}** {med['dosage']} – {med['time']}")
+                st.caption(f"{med['form']}, {med['quantity']} шт.")
+            with col2:
+                done = st.checkbox("Выполнено", key=med['name'])
+            st.divider()
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    # ========== ВКЛАДКА 3: ДНЕВНИК ЗДОРОВЬЯ ==========
+    with tabs[2]:
+        st.markdown('<div class="card"><div class="card-header">Контроль показателей при приёме препаратов</div>', unsafe_allow_html=True)
+        st.markdown("### Дневник здоровья")
+        st.markdown("Отмечайте изменения, следите за динамикой вашего здоровья")
+        
+        metric_cols = st.columns(3)
+        with metric_cols[0]:
+            st.markdown('<div class="metric-card"><div class="metric-value">📊</div><div class="metric-label">Давление</div></div>', unsafe_allow_html=True)
+        with metric_cols[1]:
+            st.markdown('<div class="metric-card"><div class="metric-value">❤️</div><div class="metric-label">Пульс</div></div>', unsafe_allow_html=True)
+        with metric_cols[2]:
+            st.markdown('<div class="metric-card"><div class="metric-value">🌡️</div><div class="metric-label">Температура</div></div>', unsafe_allow_html=True)
+        
+        dates, systolic, diastolic, pulse, temperature = get_health_data()
+        
+        # График давления
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=dates, y=systolic, mode='lines+markers', name='Систолическое', line=dict(color='#EF4444', width=2)))
+        fig.add_trace(go.Scatter(x=dates, y=diastolic, mode='lines+markers', name='Диастолическое', line=dict(color='#3B82F6', width=2)))
+        fig.update_layout(title="Артериальное давление", xaxis_title="Дата", yaxis_title="мм рт. ст.", height=400, template="plotly_white")
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # График пульса и температуры
+        col1, col2 = st.columns(2)
+        with col1:
+            fig2 = go.Figure()
+            fig2.add_trace(go.Scatter(x=dates, y=pulse, mode='lines+markers', name='Пульс', line=dict(color='#10B981', width=2)))
+            fig2.update_layout(title="Пульс (уд/мин)", height=300, template="plotly_white")
+            st.plotly_chart(fig2, use_container_width=True)
+        with col2:
+            fig3 = go.Figure()
+            fig3.add_trace(go.Scatter(x=dates, y=temperature, mode='lines+markers', name='Температура', line=dict(color='#F59E0B', width=2)))
+            fig3.update_layout(title="Температура тела", height=300, template="plotly_white")
+            st.plotly_chart(fig3, use_container_width=True)
+        
+        st.markdown("**История показаний** – 28 марта 2020")
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    # ========== ВКЛАДКА 4: ДНЕВНИК МИГРЕНИ ==========
+    with tabs[3]:
+        st.markdown('<div class="card"><div class="card-header">Дневник мигрени</div>', unsafe_allow_html=True)
+        
+        if st.button("Связаться с врачом", key="contact_doctor"):
+            st.info("Запрос отправлен. Врач свяжется с вами в ближайшее время.")
+        
+        st.markdown("**30.12.2020 - 12.01.2021**")
+        st.divider()
+        
+        # Вопросы дневника мигрени
+        headache = st.radio("Была ли у Вас сегодня головная боль?", ["Нет", "Да"])
+        if headache == "Да":
+            aura = st.radio("Были ли в течение часа до боли зрительные нарушения (вспышка, искажение, слепые пятна)?", ["Нет", "Да"])
+            location = st.selectbox("Где болела голова?", ["В затылке", "В виске", "В лобной части", "Глаза", "Вся голова"])
+            character = st.selectbox("Какой был характер боли?", ["Тупая, двусторонняя", "Пульсирующая", "Сжимающая", "Острая"])
+            physical = st.radio("Усиливалась ли боль при физической нагрузке?", ["Нет", "Да"])
+            st.success("Данные сохранены. В этом месяце 7 эпизодов (+5,7 к предыдущему)")
+            
+        st.markdown("""
+        <div style="background:#FFFFFF; border-radius:12px; padding:1rem; margin-top:1rem;">
+            <div style="font-weight:600;">Светлая</div>
+            <div>После бессонницы сделал ЭКГ</div>
+            <img src="https://via.placeholder.com/100x100?text=QR" width="100">
+            <div>spargo.ru</div>
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    # ========== ВКЛАДКА 5: РЕКОМЕНДАЦИИ ==========
+    with tabs[4]:
+        st.markdown('<div class="card"><div class="card-header">Рекомендации</div>', unsafe_allow_html=True)
+        
+        rec_cats = ["Все", "Питание", "Физические нагрузки", "Ограничения", "Прием препаратов", "Диагностика"]
+        selected_cat = st.radio("Категории:", rec_cats, horizontal=True)
+        
+        if selected_cat == "Все":
+            for cat, items in get_recommendations().items():
+                st.markdown(f"**{cat}**")
+                for item in items:
+                    st.markdown(f"- {item}")
+                st.divider()
+        else:
+            items = get_recommendations().get(selected_cat, [])
+            for item in items:
+                st.markdown(f"- {item}")
+        
+        st.markdown("### Особые указания")
+        st.info("Измерять пульс и артериальное давление ежедневно. При отклонениях - обратиться к врачу.")
+        st.markdown('</div>', unsafe_allow_html=True)
 
-class Interaction(Base):
-    __tablename__ = 'interactions'
-    id = Column(Integer, primary_key=True)
-    drug1 = Column(String)
-    drug2 = Column(String)
-    severity = Column(String)
-    description = Column(String)
+# ========================== СТРАНИЦА ВРАЧА ==========================
+def doctor_dashboard():
+    st.markdown('<div class="logo-title">Цифровая история назначений - Врач</div>', unsafe_allow_html=True)
+    st.markdown("---")
+    
+    col1, col2 = st.columns([1,2])
+    with col1:
+        st.markdown('<div class="card"><div class="card-header">Пациенты</div>', unsafe_allow_html=True)
+        patients = ["Иванов И.И.", "Петров П.П.", "Сидоров С.С."]
+        for p in patients:
+            if st.button(p, use_container_width=True):
+                st.session_state.selected_patient = p
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    with col2:
+        if st.session_state.get('selected_patient'):
+            st.markdown(f'<div class="card"><div class="card-header">{st.session_state.selected_patient}</div>', unsafe_allow_html=True)
+            st.markdown("**Активные назначения:**")
+            for med in get_medications():
+                st.checkbox(f"{med['name']} {med['dosage']} – {med['time']}")
+            st.markdown("**История болезни:**")
+            st.write("Гипертоническая болезнь, риск 3. Назначен Энап и Аспирин Кардио.")
+            st.markdown("**Рекомендации:**")
+            for cat, items in get_recommendations().items():
+                st.markdown(f"- {cat}: {', '.join(items)}")
+            st.markdown('</div>', unsafe_allow_html=True)
 
-Base.metadata.create_all(engine)
+# ========================== СТРАНИЦА ФАРМАЦЕВТА ==========================
+def pharmacist_dashboard():
+    st.markdown('<div class="logo-title">Цифровая история назначений - Фармацевт</div>', unsafe_allow_html=True)
+    st.markdown("---")
+    
+    st.markdown('<div class="card"><div class="card-header">Проверка рецепта</div>', unsafe_allow_html=True)
+    rx_id = st.text_input("Введите номер рецепта")
+    if st.button("Найти рецепт"):
+        st.markdown("""
+        <div style="background:#FFFFFF; border-radius:12px; padding:1rem;">
+            <div><strong>Рецепт №12345</strong></div>
+            <div>Пациент: Иванов И.И.</div>
+            <div>Препараты: Энап 5 мг, Аспирин Кардио 300 мг</div>
+            <div>Статус: <span style="color:#22C55E;">Действителен</span></div>
+            <label><input type="checkbox"> Подтвердить отпуск</label>
+        </div>
+        """, unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-def init_db():
-    session = SessionLocal()
-    if session.query(User).count() == 0:
-        users = [
-            User(username="doctor", password="doctor", role="doctor", full_name="Анна Петрова"),
-            User(username="pharmacist", password="pharm", role="pharmacist", full_name="Иван Смирнов"),
-            User(username="patient", password="patient", role="patient", full_name="Пётр Сидоров")
-        ]
-        session.add_all(users)
-        session.commit()
-    if session.query(Patient).count() == 0:
-        patient = Patient(first_name="Пётр", last_name="Сидоров", birth_date=date(1965,5,20), policy_number="1234567890", allergies="Пенициллин")
-        session.add(patient)
-        session.commit()
-    if session.query(Interaction).count() == 0:
-        interactions = [
-            Interaction(drug1="Аспирин", drug2="Варфарин", severity="high", description="Повышенный риск кровотечения"),
-            Interaction(drug1="Ибупрофен", drug2="Аспирин", severity="medium", description="Риск желудочно-кишечного кровотечения"),
-        ]
-        session.add_all(interactions)
-        session.commit()
-    session.close()
-
-init_db()
-
-# ========================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========================
-def hash_password(pwd):
-    return hashlib.sha256(pwd.encode()).hexdigest()
-
-def authenticate(username, password):
-    session = SessionLocal()
-    user = session.query(User).filter(User.username == username, User.password == password).first()
-    session.close()
-    return user
-
-def check_interactions(drug_names):
-    session = SessionLocal()
-    warnings = []
-    for i, d1 in enumerate(drug_names):
-        for d2 in drug_names[i+1:]:
-            rule = session.query(Interaction).filter(
-                ((Interaction.drug1 == d1) & (Interaction.drug2 == d2)) |
-                ((Interaction.drug1 == d2) & (Interaction.drug2 == d1))
-            ).first()
-            if rule:
-                warnings.append(f"{d1} + {d2}: {rule.description} (уровень {rule.severity})")
-    session.close()
-    return warnings
-
-def get_active_prescriptions(patient_id):
-    session = SessionLocal()
-    prescs = session.query(Prescription).filter(Prescription.patient_id == patient_id, Prescription.status.in_(['active', 'partially_dispensed'])).all()
-    drugs = []
-    for p in prescs:
-        items = session.query(PrescriptionItem).filter(PrescriptionItem.prescription_id == p.id, PrescriptionItem.is_dispensed == False).all()
-        drugs.extend([i.drug_name for i in items])
-    session.close()
-    return list(set(drugs))
-
-def evaluate_polypharmacy(patient_id, new_drugs):
-    active = get_active_prescriptions(patient_id)
-    total = len(active) + len(new_drugs)
-    return total >= 5, total
-
-def generate_qr_token(prescription_id):
-    secret = "secret_key_123"
-    token = hashlib.sha256(f"{prescription_id}{secret}".encode()).hexdigest()[:16]
-    return token
-
-def generate_qr_image(token):
-    img = qrcode.make(f"http://localhost:8501?rx={token}")
-    buffered = BytesIO()
-    img.save(buffered, format="PNG")
-    buffered.seek(0)
-    return buffered
-
-# ========================== СТРАНИЦЫ ==========================
+# ========================== ВХОД ==========================
 def login_page():
     st.markdown('<div class="logo-title">Цифровая история назначений</div>', unsafe_allow_html=True)
     st.markdown("---")
     col1, col2, col3 = st.columns([1,2,1])
     with col2:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("Вход в систему")
         username = st.text_input("Логин")
         password = st.text_input("Пароль", type="password")
+        role = st.selectbox("Роль", ["patient", "doctor", "pharmacist"])
         if st.button("Войти", use_container_width=True):
-            user = authenticate(username, password)
-            if user:
-                st.session_state['authenticated'] = True
-                st.session_state['user'] = user
-                st.rerun()
-            else:
-                st.error("Неверный логин или пароль")
-        st.caption("Тестовые учётные записи: doctor/doctor, pharmacist/pharm, patient/patient")
-
-def main_app():
-    # Шапка с названием и пользователем
-    col1, col2 = st.columns([3,1])
-    with col1:
-        st.markdown('<div class="logo-title">Цифровая история назначений</div>', unsafe_allow_html=True)
-    with col2:
-        st.markdown(f'<div class="user-info" style="text-align: right;">{st.session_state.user.full_name} ({st.session_state.user.role})</div>', unsafe_allow_html=True)
-    st.markdown("---")
-
-    # Боковое меню
-    with st.sidebar:
-        st.markdown("## Навигация")
-        if st.session_state.user.role == "doctor":
-            menu = st.radio("", ["Создать рецепт", "Активные пациенты"])
-        elif st.session_state.user.role == "pharmacist":
-            menu = st.radio("", ["Проверить рецепт", "Очередь"])
-        else:
-            menu = st.radio("", ["Мои рецепты", "История"])
-        if st.button("Выйти"):
-            for key in ['authenticated', 'user']:
-                if key in st.session_state:
-                    del st.session_state[key]
+            st.session_state['authenticated'] = True
+            st.session_state['role'] = role
+            st.session_state['user'] = {"username": username, "role": role}
             st.rerun()
+        st.caption("Тестовые учётки: любой логин/пароль")
+        st.markdown('</div>', unsafe_allow_html=True)
 
-    # Рендер страниц
-    if st.session_state.user.role == "doctor":
-        if menu == "Создать рецепт":
-            doctor_create_prescription()
-        else:
-            doctor_patients()
-    elif st.session_state.user.role == "pharmacist":
-        if menu == "Проверить рецепт":
-            pharmacist_check()
-        else:
-            pharmacist_queue()
-    else:
-        if menu == "Мои рецепты":
-            patient_active()
-        else:
-            patient_history()
-
-def doctor_create_prescription():
-    st.header("Новый рецепт")
-    session = SessionLocal()
-    patients = session.query(Patient).all()
-    patient_options = {f"{p.last_name} {p.first_name}": p.id for p in patients}
-    selected = st.selectbox("Пациент", list(patient_options.keys()))
-    patient_id = patient_options[selected]
-
-    if "drugs" not in st.session_state:
-        st.session_state.drugs = [{"name":"","dosage":"","quantity":1}]
-    def add_drug():
-        st.session_state.drugs.append({"name":"","dosage":"","quantity":1})
-    def remove_drug(i):
-        st.session_state.drugs.pop(i)
-
-    st.subheader("Препараты")
-    for i, drug in enumerate(st.session_state.drugs):
-        cols = st.columns([3,2,1,0.5])
-        drug["name"] = cols[0].text_input("Название", drug["name"], key=f"name_{i}")
-        drug["dosage"] = cols[1].text_input("Дозировка", drug["dosage"], key=f"dose_{i}")
-        drug["quantity"] = cols[2].number_input("Кол-во", min_value=1, value=drug["quantity"], key=f"qty_{i}")
-        if cols[3].button("Удалить", key=f"del_{i}"):
-            remove_drug(i)
-            st.rerun()
-    st.button("Добавить препарат", on_click=add_drug)
-
-    drug_names = [d["name"] for d in st.session_state.drugs if d["name"]]
-    if drug_names:
-        warnings = check_interactions(drug_names)
-        for w in warnings:
-            st.markdown(f'<div class="alert-danger">{w}</div>', unsafe_allow_html=True)
-        poly, total = evaluate_polypharmacy(patient_id, drug_names)
-        if poly:
-            st.markdown(f'<div class="alert-warning">Полипрагмазия: {total} активных препаратов. Рекомендуется пересмотр терапии.</div>', unsafe_allow_html=True)
-
-    if st.button("Сохранить рецепт", type="primary"):
-        if not drug_names:
-            st.error("Добавьте хотя бы один препарат")
-        else:
-            new_pres = Prescription(patient_id=patient_id, doctor_id=st.session_state.user.id, status='active')
-            session.add(new_pres)
-            session.flush()
-            for d in st.session_state.drugs:
-                if d["name"]:
-                    item = PrescriptionItem(prescription_id=new_pres.id, drug_name=d["name"], dosage=d["dosage"], quantity=d["quantity"])
-                    session.add(item)
-            token = generate_qr_token(new_pres.id)
-            new_pres.qr_token = token
-            session.commit()
-            st.success("Рецепт сохранён")
-            qr_img = generate_qr_image(token)
-            st.image(qr_img, width=200)
-            st.session_state.drugs = [{"name":"","dosage":"","quantity":1}]
-            st.rerun()
-    session.close()
-
-def doctor_patients():
-    st.header("Активные пациенты")
-    session = SessionLocal()
-    patients = session.query(Patient).all()
-    for p in patients:
-        with st.expander(f"{p.last_name} {p.first_name}"):
-            st.write(f"Дата рождения: {p.birth_date}")
-            st.write(f"Аллергии: {p.allergies or 'Нет'}")
-            active = get_active_prescriptions(p.id)
-            if active:
-                st.write("Активные назначения:", ", ".join(active))
-            else:
-                st.write("Нет активных назначений")
-    session.close()
-
-def pharmacist_queue():
-    st.header("Очередь рецептов")
-    session = SessionLocal()
-    prescriptions = session.query(Prescription).filter(Prescription.status.in_(['active', 'partially_dispensed'])).all()
-    if not prescriptions:
-        st.info("Нет рецептов в очереди")
-    for p in prescriptions:
-        patient = session.query(Patient).get(p.patient_id)
-        st.markdown(f'<div class="card">Рецепт #{p.id} - Пациент: {patient.last_name} {patient.first_name} - Статус: {p.status}</div>', unsafe_allow_html=True)
-    session.close()
-
-def pharmacist_check():
-    st.header("Проверка рецепта")
-    rx_id = st.text_input("Введите номер рецепта")
-    if st.button("Найти"):
-        session = SessionLocal()
-        pres = session.query(Prescription).filter(Prescription.id == int(rx_id)).first() if rx_id.isdigit() else None
-        if pres:
-            patient = session.query(Patient).get(pres.patient_id)
-            st.markdown(f'<div class="card"><strong>Пациент:</strong> {patient.last_name} {patient.first_name}<br><strong>Статус:</strong> {pres.status}</div>', unsafe_allow_html=True)
-            items = session.query(PrescriptionItem).filter(PrescriptionItem.prescription_id == pres.id).all()
-            for item in items:
-                col1, col2, col3 = st.columns([3,1,1])
-                col1.write(f"{item.drug_name} {item.dosage}")
-                col2.write(f"Кол-во: {item.quantity}")
-                if not item.is_dispensed:
-                    if col3.button(f"Отпустить {item.id}", key=item.id):
-                        item.is_dispensed = True
-                        session.commit()
-                        st.rerun()
-                else:
-                    col3.write("Отпущен")
-            all_dispensed = all(i.is_dispensed for i in items)
-            if all_dispensed and len(items)>0:
-                pres.status = 'dispensed'
-                session.commit()
-                st.success("Рецепт полностью отпущен")
-        else:
-            st.error("Рецепт не найден")
-        session.close()
-
-def patient_active():
-    st.header("Мои активные рецепты")
-    session = SessionLocal()
-    patient = session.query(Patient).filter(Patient.last_name == "Сидоров").first()  # упрощённо
-    if patient:
-        prescriptions = session.query(Prescription).filter(Prescription.patient_id == patient.id, Prescription.status.in_(['active', 'partially_dispensed'])).all()
-        for p in prescriptions:
-            with st.expander(f"Рецепт от {p.created_at.strftime('%d.%m.%Y')}"):
-                items = session.query(PrescriptionItem).filter(PrescriptionItem.prescription_id == p.id).all()
-                for item in items:
-                    st.write(f"{item.drug_name} {item.dosage} - {item.quantity} шт. - {'Отпущен' if item.is_dispensed else 'Не отпущен'}")
-                if p.qr_token:
-                    qr_img = generate_qr_image(p.qr_token)
-                    st.image(qr_img, width=150)
-    session.close()
-
-def patient_history():
-    st.header("История назначений")
-    session = SessionLocal()
-    patient = session.query(Patient).filter(Patient.last_name == "Сидоров").first()
-    if patient:
-        prescriptions = session.query(Prescription).filter(Prescription.patient_id == patient.id).order_by(Prescription.created_at).all()
-        data = []
-        for p in prescriptions:
-            items = session.query(PrescriptionItem).filter(PrescriptionItem.prescription_id == p.id).all()
-            data.append({
-                "Дата": p.created_at.strftime("%Y-%m-%d"),
-                "Препараты": ", ".join([i.drug_name for i in items]),
-                "Статус": p.status
-            })
-        df = pd.DataFrame(data)
-        st.dataframe(df, use_container_width=True)
-        # График
-        monthly = {}
-        for p in prescriptions:
-            month = p.created_at.strftime("%Y-%m")
-            cnt = session.query(PrescriptionItem).filter(PrescriptionItem.prescription_id == p.id).count()
-            monthly[month] = monthly.get(month, 0) + cnt
-        if monthly:
-            df_plot = pd.DataFrame(list(monthly.items()), columns=["Месяц", "Кол-во"])
-            fig = px.bar(df_plot, x="Месяц", y="Кол-во", title="Динамика назначений", color_discrete_sequence=["#3B82F6"])
-            st.plotly_chart(fig, use_container_width=True)
-    session.close()
-
-# ========================== ГЛАВНЫЙ ПОТОК ==========================
+# ========================== ГЛАВНЫЙ МАРШРУТИЗАТОР ==========================
 if 'authenticated' not in st.session_state:
     st.session_state['authenticated'] = False
-    st.session_state['user'] = None
 
 if not st.session_state.authenticated:
     login_page()
 else:
-    main_app()
+    if st.session_state.get('role') == 'doctor':
+        doctor_dashboard()
+    elif st.session_state.get('role') == 'pharmacist':
+        pharmacist_dashboard()
+    else:
+        patient_dashboard()
