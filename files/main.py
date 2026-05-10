@@ -19,6 +19,47 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+st.markdown("""
+<style>
+    /* Принудительно белый фон везде */
+    .stApp, .stApp > header, .stApp > div {
+        background-color: #FFFFFF !important;
+    }
+    /* Все тексты и метки — чёрные */
+    body, .stMarkdown, label, .stTextInput label, .stSelectbox label, .stNumberInput label, .stTextArea label, .stDateInput label, .stCheckbox label, .stCaption, .stAlert {
+        color: #111827 !important;
+    }
+    /* Поля ввода — белые, текст чёрный */
+    .stTextInput input, .stSelectbox div[data-baseweb="select"] > div, .stNumberInput input, .stTextArea textarea, .stDateInput input {
+        background-color: #FFFFFF !important;
+        color: #111827 !important;
+        border: 1px solid #D1D5DB !important;
+        border-radius: 8px !important;
+    }
+    /* Выпадающие списки */
+    .stSelectbox div[data-baseweb="select"] ul {
+        background-color: #FFFFFF !important;
+        color: #111827 !important;
+    }
+    /* Кнопки — синий фон, белый текст */
+    .stButton button {
+        background-color: #3B82F6 !important;
+        color: #FFFFFF !important;
+        border-radius: 8px !important;
+        border: none !important;
+        font-weight: 500 !important;
+    }
+    .stButton button:hover {
+        background-color: #2563EB !important;
+    }
+    /* Карточки и прочие блоки (не меняйте, если всё устраивает) */
+    .card, .metric-card {
+        background-color: #F9FAFB !important;
+        color: #111827 !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # ========================== CSS ДЛЯ ПРОФЕССИОНАЛЬНОГО ВИДА ==========================
 st.markdown("""
 <style>
