@@ -1,3 +1,7 @@
 streamlit
 pandas
 plotly
+qrcode
+Pillow
+sqlalchemy
+bcrypt
