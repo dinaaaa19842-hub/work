@@ -1,8 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
-from datetime import datetime, date, timedelta
+from datetime import datetime, date
 import sqlite3
 import hashlib
 import qrcode
@@ -10,55 +9,24 @@ from io import BytesIO
 import base64
 
 # ========================== НАСТРОЙКА СТРАНИЦЫ ==========================
-st.set_page_config(
-    page_title="Цифровая история назначений",
-    page_icon="🏥",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="Цифровая история назначений", page_icon="🏥", layout="wide")
 
 # ========================== CSS ==========================
 st.markdown("""
 <style>
     .stApp, .stApp > header, .stApp > div { background-color: #F7F9FC !important; }
-    html, body, [data-testid="stAppViewContainer"], .stMarkdown, label,
-    .stTextInput label, .stSelectbox label, .stNumberInput label, .stCheckbox label,
-    .stRadio label, .stDateInput label, .stCaption {
-        color: #1F2A3E !important;
-        background-color: transparent;
+    html, body, .stMarkdown, label, .stTextInput label, .stSelectbox label, .stNumberInput label, .stCheckbox label, .stRadio label, .stDateInput label, .stCaption {
+        color: #1F2A3E !important; background-color: transparent;
     }
     h1, h2, h3, h4, h5, h6 { color: #1F2A3E !important; }
-    .card {
-        background-color: #FFFFFF;
-        border-radius: 16px;
-        padding: 1.5rem;
-        margin-bottom: 1.5rem;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-        border: 1px solid #E8ECF0;
-    }
-    .card-header {
-        font-size: 1.2rem;
-        font-weight: 600;
-        color: #1F2A3E;
-        margin-bottom: 1rem;
-        padding-bottom: 0.5rem;
-        border-bottom: 2px solid #3B82F6;
-        display: inline-block;
-    }
-    .stTextInput input, .stSelectbox div[data-baseweb="select"] > div,
-    .stNumberInput input, .stTextArea textarea, .stDateInput input {
-        background-color: #FFFFFF !important;
-        color: #1F2A3E !important;
-        border: 1px solid #D1D9E8 !important;
-        border-radius: 8px !important;
+    .card { background-color: #FFFFFF; border-radius: 16px; padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid #E8ECF0; }
+    .card-header { font-size: 1.2rem; font-weight: 600; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 2px solid #3B82F6; display: inline-block; }
+    .stTextInput input, .stSelectbox div[data-baseweb="select"] > div, .stNumberInput input, .stTextArea textarea, .stDateInput input {
+        background-color: #FFFFFF !important; color: #1F2A3E !important; border: 1px solid #D1D9E8 !important; border-radius: 8px !important;
     }
     .stButton button {
-        background-color: #3B82F6 !important;
-        color: #FFFFFF !important;
-        border-radius: 12px !important;
-        border: none !important;
-        padding: 0.5rem 1.5rem !important;
-        font-weight: 500 !important;
+        background-color: #3B82F6 !important; color: #FFFFFF !important; border-radius: 12px !important; border: none !important;
+        padding: 0.25rem 1rem !important; font-weight: 500 !important; width: 100px; white-space: nowrap;
     }
     .stButton button:hover { background-color: #2563EB !important; }
     table { width: 100%; border-collapse: collapse; }
@@ -74,20 +42,16 @@ def init_db():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS patients
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  last_name TEXT, first_name TEXT, birth_date TEXT,
-                  policy TEXT, location TEXT)''')
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, last_name TEXT, first_name TEXT,
+                  birth_date TEXT, policy TEXT, location TEXT)''')
     c.execute('''CREATE TABLE IF NOT EXISTS prescriptions
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  patient_id INTEGER, drug_name TEXT, dosage_mg TEXT,
-                  regularity TEXT, start_date TEXT, end_date TEXT,
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, patient_id INTEGER, drug_name TEXT,
+                  dosage_mg TEXT, regularity TEXT, start_date TEXT, end_date TEXT,
                   FOREIGN KEY(patient_id) REFERENCES patients(id))''')
     c.execute('''CREATE TABLE IF NOT EXISTS intake_log
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  prescription_id INTEGER, intake_date TEXT,
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, prescription_id INTEGER, intake_date TEXT,
                   FOREIGN KEY(prescription_id) REFERENCES prescriptions(id))''')
     conn.commit()
-    # Тестовые данные
     c.execute("SELECT COUNT(*) FROM patients")
     if c.fetchone()[0] == 0:
         test_patients = [
@@ -103,7 +67,6 @@ def init_db():
                           (pid, "Энап", "5", "1 раз в день", "2026-05-01", "2026-06-01"))
                 c.execute("INSERT INTO prescriptions (patient_id, drug_name, dosage_mg, regularity, start_date, end_date) VALUES (?,?,?,?,?,?)",
                           (pid, "Аспирин Кардио", "100", "1 раз в день", "2026-05-01", "2026-06-01"))
-                # добавим отметки приёма для демонстрации
                 for d in range(3, 12):
                     c.execute("INSERT INTO intake_log (prescription_id, intake_date) VALUES (?, ?)", (1, f"2026-05-{d:02d}"))
             elif pid == 2:
@@ -117,8 +80,8 @@ def init_db():
 
 init_db()
 
-# ========================== ФУНКЦИИ РАБОТЫ С БД ==========================
-def get_all_patients(search_query="", birth_date_filter=None, location_filter=""):
+# ========================== ФУНКЦИИ ДЛЯ БД ==========================
+def get_all_patients(search_query="", birth_date_filter="", location_filter=""):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     query = "SELECT id, last_name, first_name, birth_date, policy, location FROM patients WHERE 1=1"
@@ -137,28 +100,28 @@ def get_all_patients(search_query="", birth_date_filter=None, location_filter=""
     conn.close()
     return rows
 
-def get_patient_by_id(patient_id):
+def get_patient_by_id(pid):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("SELECT id, last_name, first_name, birth_date, policy, location FROM patients WHERE id=?", (patient_id,))
+    c.execute("SELECT id, last_name, first_name, birth_date, policy, location FROM patients WHERE id=?", (pid,))
     patient = c.fetchone()
     if patient:
-        c.execute("SELECT id, drug_name, dosage_mg, regularity, start_date, end_date FROM prescriptions WHERE patient_id=?", (patient_id,))
-        prescriptions = c.fetchall()
+        c.execute("SELECT id, drug_name, dosage_mg, regularity, start_date, end_date FROM prescriptions WHERE patient_id=?", (pid,))
+        prescs = c.fetchall()
         conn.close()
-        return patient, prescriptions
+        return patient, prescs
     conn.close()
     return None, []
 
-def save_patient(patient_id, last_name, first_name, birth_date, policy, location, prescriptions_list):
+def save_patient(pid, last_name, first_name, birth_date, policy, location, prescriptions_list):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     c.execute("UPDATE patients SET last_name=?, first_name=?, birth_date=?, policy=?, location=? WHERE id=?",
-              (last_name, first_name, birth_date, policy, location, patient_id))
-    c.execute("DELETE FROM prescriptions WHERE patient_id=?", (patient_id,))
+              (last_name, first_name, birth_date, policy, location, pid))
+    c.execute("DELETE FROM prescriptions WHERE patient_id=?", (pid,))
     for drug in prescriptions_list:
         c.execute("INSERT INTO prescriptions (patient_id, drug_name, dosage_mg, regularity, start_date, end_date) VALUES (?,?,?,?,?,?)",
-                  (patient_id, drug[0], drug[1], drug[2], "2026-05-01", "2026-06-01"))
+                  (pid, drug[0], drug[1], drug[2], "2026-05-01", "2026-06-01"))
     conn.commit()
     conn.close()
 
@@ -187,21 +150,18 @@ def add_intake(prescription_id, intake_date):
     conn.commit()
     conn.close()
 
-# ========================== ЛЕКАРСТВЕННЫЕ ВЗАИМОДЕЙСТВИЯ И ПОЛИПРАГМАЗИЯ ==========================
-INTERACTIONS_DB = {
-    ("Энап", "Аспирин Кардио"): "Энап + Аспирин Кардио: возможно снижение антигипертензивного эффекта",
-    ("Метформин", "Аспирин Кардио"): "Риск гипогликемии",
-    ("Амлодипин", "Метопролол"): "Усиление гипотензивного эффекта"
-}
-
 def check_interactions(drug_names):
+    interactions_db = {
+        ("Энап", "Аспирин Кардио"): "Энап + Аспирин Кардио: возможно снижение антигипертензивного эффекта",
+        ("Метформин", "Аспирин Кардио"): "Риск гипогликемии",
+    }
     warnings = []
     for i, d1 in enumerate(drug_names):
         for d2 in drug_names[i+1:]:
-            if (d1, d2) in INTERACTIONS_DB:
-                warnings.append(INTERACTIONS_DB[(d1, d2)])
-            elif (d2, d1) in INTERACTIONS_DB:
-                warnings.append(INTERACTIONS_DB[(d2, d1)])
+            if (d1, d2) in interactions_db:
+                warnings.append(interactions_db[(d1, d2)])
+            elif (d2, d1) in interactions_db:
+                warnings.append(interactions_db[(d2, d1)])
     return warnings
 
 def polypharmacy_analysis(num_drugs):
@@ -229,30 +189,40 @@ def doctor_patients_list():
     with col1:
         search_name = st.text_input("Поиск по фамилии/имени", placeholder="Иванов")
     with col2:
-        birth_filter = st.text_input("Дата рождения (ГГГГ-ММ-ДД)", placeholder="1980-05-15")
+        birth_filter = st.text_input("Фильтр по дате рождения (ГГГГ-ММ-ДД)", placeholder="1980-05-15")
     with col3:
-        location_filter = st.text_input("Местоположение", placeholder="Москва")
-    patients = get_all_patients(search_name, birth_filter if birth_filter else "", location_filter)
+        location_filter = st.text_input("Фильтр по местоположению", placeholder="Москва")
+    patients = get_all_patients(search_name, birth_filter, location_filter)
     if not patients:
         st.info("Пациенты не найдены")
     else:
-        df = pd.DataFrame(patients, columns=["ID","Фамилия","Имя","Дата_рожд","Полис","Мес"])
+        df = pd.DataFrame(patients, columns=["ID","Фамилия","Имя","Дата_рожд","Полис","Местоположение"])
         df["Препараты"] = [", ".join([p[1] for p in get_patient_by_id(pid)[1]]) for pid in df["ID"]]
-        st.dataframe(df[["ID","Фамилия","Имя","Дата_рожд","Мес","Препараты"]], use_container_width=True)
-        st.markdown("---")
-        for _, row in df.iterrows():
-            cols = st.columns([3,1,1,1])
-            cols[0].write(f"{row['Фамилия']} {row['Имя']} (ID {row['ID']})")
-            if cols[1].button("✏️ Редактировать", key=f"edit_{row['ID']}"):
-                st.session_state['edit_patient_id'] = row['ID']
+        display_df = df[["ID","Фамилия","Имя","Дата_рожд","Местоположение","Препараты"]]
+        # Вставляем колонки для кнопок
+        cols = st.columns([0.8, 1, 1, 1, 1.5, 1.5, 0.8, 0.8, 0.8])
+        headers = ["ID", "Фамилия", "Имя", "Дата_рожд", "Местоположение", "Препараты", "Редакт", "График", "Аналитика"]
+        for i, header in enumerate(headers):
+            cols[i].write(f"**{header}**")
+        for _, row in display_df.iterrows():
+            cols2 = st.columns([0.8, 1, 1, 1, 1.5, 1.5, 0.8, 0.8, 0.8])
+            cols2[0].write(row["ID"])
+            cols2[1].write(row["Фамилия"])
+            cols2[2].write(row["Имя"])
+            cols2[3].write(row["Дата_рожд"])
+            cols2[4].write(row["Местоположение"])
+            cols2[5].write(row["Препараты"])
+            pid = row["ID"]
+            if cols2[6].button("✏️", key=f"edit_{pid}"):
+                st.session_state['edit_patient_id'] = pid
                 st.session_state['page'] = 'doctor_edit'
                 st.rerun()
-            if cols[2].button("📈 График", key=f"graph_{row['ID']}"):
-                st.session_state['graph_patient_id'] = row['ID']
+            if cols2[7].button("📈", key=f"graph_{pid}"):
+                st.session_state['graph_patient_id'] = pid
                 st.session_state['page'] = 'doctor_graph'
                 st.rerun()
-            if cols[3].button("📊 Аналитика", key=f"analytics_{row['ID']}"):
-                st.session_state['analytics_patient_id'] = row['ID']
+            if cols2[8].button("📊", key=f"analytics_{pid}"):
+                st.session_state['analytics_patient_id'] = pid
                 st.session_state['page'] = 'doctor_analytics'
                 st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
@@ -274,7 +244,7 @@ def doctor_edit_patient():
         updated = []
         for i, p in enumerate(prescs):
             col1, col2, col3, col4 = st.columns([3,1,2,1])
-            drug = col1.text_input(f"Название {i+1}", value=p[1], key=f"drug_{i}")
+            drug = col1.text_input(f"Препарат {i+1}", value=p[1], key=f"drug_{i}")
             dose = col2.text_input(f"мг", value=p[2], key=f"dose_{i}")
             reg = col3.text_input(f"Регулярность", value=p[3], key=f"reg_{i}")
             if col4.button("🗑", key=f"del_{i}"):
@@ -282,36 +252,43 @@ def doctor_edit_patient():
             updated.append((drug, dose, reg))
         if st.form_submit_button("➕ Добавить препарат"):
             updated.append(("", "", ""))
-        if st.form_submit_button("💾 Сохранить"):
+        if st.form_submit_button("💾 Сохранить изменения"):
             valid = [(d[0], d[1], d[2]) for d in updated if d[0].strip()]
             save_patient(pid, new_last, new_first, new_birth.isoformat(), new_policy, new_location, valid)
             st.success("Сохранено")
             st.session_state['page'] = 'doctor_patients'
             st.rerun()
-    if st.button("Назад к списку"):
+    if st.button("← Назад к списку пациентов"):
         st.session_state['page'] = 'doctor_patients'
         st.rerun()
 
 def doctor_patient_graph():
     pid = st.session_state.get('graph_patient_id')
+    if not pid:
+        st.session_state['page'] = 'doctor_patients'
+        st.rerun()
     patient, prescs = get_patient_by_id(pid)
     st.markdown(f"<div class='card-header'>График приёма: {patient[1]} {patient[2]}</div>", unsafe_allow_html=True)
     for p in prescs:
-        st.subheader(f"{p[1]} {p[2]} мг")
         dates = get_intake_dates(p[0])
         if dates:
             df = pd.DataFrame({"date": pd.to_datetime(dates)})
             daily = df.groupby(df["date"].dt.date).size().reset_index(name="count")
-            fig = px.bar(daily, x="date", y="count", title=f"Приём {p[1]}", labels={"count": "Таблеток", "date": "Дата"})
+            fig = px.line(daily, x="date", y="count", markers=True, title=f"Приём {p[1]} {p[2]} мг",
+                          labels={"count": "Количество таблеток", "date": "Дата"})
+            fig.update_traces(line=dict(color="#3B82F6", width=2), marker=dict(size=8))
             st.plotly_chart(fig, use_container_width=True)
         else:
-            st.write("Нет данных о приёме")
-    if st.button("Назад"):
+            st.write(f"Нет данных о приёме для {p[1]}")
+    if st.button("← Назад к списку пациентов"):
         st.session_state['page'] = 'doctor_patients'
         st.rerun()
 
 def doctor_patient_analytics():
     pid = st.session_state.get('analytics_patient_id')
+    if not pid:
+        st.session_state['page'] = 'doctor_patients'
+        st.rerun()
     patient, prescs = get_patient_by_id(pid)
     st.markdown(f"<div class='card-header'>Аналитика: {patient[1]} {patient[2]}</div>", unsafe_allow_html=True)
     drugs = [p[1] for p in prescs if p[1]]
@@ -320,7 +297,7 @@ def doctor_patient_analytics():
     else:
         warnings = check_interactions(drugs)
         if warnings:
-            st.warning("Взаимодействия:")
+            st.warning("Обнаружены взаимодействия:")
             for w in warnings:
                 st.write(f"- {w}")
         else:
@@ -329,7 +306,7 @@ def doctor_patient_analytics():
         st.metric("Количество препаратов", len(drugs))
         st.markdown(f"**Уровень полипрагмазии:** <span style='color:{color}'>{level}</span>", unsafe_allow_html=True)
         st.info(f"Рекомендация: {rec}")
-    if st.button("Назад"):
+    if st.button("← Назад к списку пациентов"):
         st.session_state['page'] = 'doctor_patients'
         st.rerun()
 
@@ -360,7 +337,6 @@ def doctor_dashboard():
 # ========================== СТРАНИЦА ПАЦИЕНТА ==========================
 def patient_dashboard():
     st.markdown('<div class="logo-title">👤 Цифровая история назначений - Пациент</div>', unsafe_allow_html=True)
-    # Для демонстрации используем пациента с ID=1
     pid = 1
     patient, prescs = get_patient_by_id(pid)
     st.markdown(f"<div class='card-header'>Ваши назначения: {patient[1]} {patient[2]}</div>", unsafe_allow_html=True)
