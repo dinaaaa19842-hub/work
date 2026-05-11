@@ -234,31 +234,51 @@ def doctor_edit_patient():
         st.rerun()
     patient, prescs = get_patient_by_id(pid)
     st.markdown(f"<div class='card-header'>Редактирование: {patient[1]} {patient[2]}</div>", unsafe_allow_html=True)
-    with st.form("edit_form"):
-        new_last = st.text_input("Фамилия", value=patient[1])
-        new_first = st.text_input("Имя", value=patient[2])
-        new_birth = st.date_input("Дата рождения", value=datetime.strptime(patient[3], "%Y-%m-%d").date())
-        new_policy = st.text_input("Полис", value=patient[4] or "")
-        new_location = st.text_input("Местоположение", value=patient[5] or "")
-        st.subheader("Препараты")
-        updated = []
-        for i, p in enumerate(prescs):
-            col1, col2, col3, col4 = st.columns([3,1,2,1])
-            drug = col1.text_input(f"Препарат {i+1}", value=p[1], key=f"drug_{i}")
-            dose = col2.text_input(f"мг", value=p[2], key=f"dose_{i}")
-            reg = col3.text_input(f"Регулярность", value=p[3], key=f"reg_{i}")
-            if col4.button("🗑", key=f"del_{i}"):
-                continue
-            updated.append((drug, dose, reg))
-        if st.form_submit_button("➕ Добавить препарат"):
-            updated.append(("", "", ""))
-        if st.form_submit_button("💾 Сохранить изменения"):
-            valid = [(d[0], d[1], d[2]) for d in updated if d[0].strip()]
-            save_patient(pid, new_last, new_first, new_birth.isoformat(), new_policy, new_location, valid)
-            st.success("Сохранено")
-            st.session_state['page'] = 'doctor_patients'
+
+    # Основные данные без формы
+    new_last = st.text_input("Фамилия", value=patient[1])
+    new_first = st.text_input("Имя", value=patient[2])
+    new_birth = st.date_input("Дата рождения", value=datetime.strptime(patient[3], "%Y-%m-%d").date())
+    new_policy = st.text_input("Полис", value=patient[4] or "")
+    new_location = st.text_input("Местоположение", value=patient[5] or "")
+
+    st.subheader("Препараты")
+    # Инициализация session_state для списка препаратов
+    if 'edit_prescriptions_list' not in st.session_state or st.session_state.get('edit_patient_id_prev') != pid:
+        st.session_state['edit_prescriptions_list'] = [list(p[1:4]) for p in prescs]
+        st.session_state['edit_patient_id_prev'] = pid
+
+    items = st.session_state['edit_prescriptions_list']
+    # Отображение строк препаратов
+    for idx, item in enumerate(items):
+        col1, col2, col3, col4 = st.columns([3, 1, 2, 0.5])
+        drug = col1.text_input(f"Название {idx+1}", value=item[0], key=f"drug_edit_{idx}")
+        dose = col2.text_input(f"мг", value=item[1], key=f"dose_edit_{idx}")
+        reg = col3.text_input(f"Регулярность", value=item[2], key=f"reg_edit_{idx}")
+        if col4.button("🗑", key=f"del_edit_{idx}"):
+            items.pop(idx)
             st.rerun()
+        items[idx] = [drug, dose, reg]
+
+    if st.button("➕ Добавить препарат"):
+        items.append(["", "", ""])
+        st.rerun()
+
+    # Сохранение
+    if st.button("💾 Сохранить изменения"):
+        valid = [(d[0], d[1], d[2]) for d in items if d[0].strip()]
+        save_patient(pid, new_last, new_first, new_birth.isoformat(), new_policy, new_location, valid)
+        st.success("Данные сохранены")
+        # Убираем временные данные
+        del st.session_state['edit_prescriptions_list']
+        del st.session_state['edit_patient_id_prev']
+        st.session_state['page'] = 'doctor_patients'
+        st.rerun()
+
     if st.button("← Назад к списку пациентов"):
+        if 'edit_prescriptions_list' in st.session_state:
+            del st.session_state['edit_prescriptions_list']
+            del st.session_state['edit_patient_id_prev']
         st.session_state['page'] = 'doctor_patients'
         st.rerun()
 
