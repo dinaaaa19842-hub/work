@@ -11,36 +11,40 @@ import base64
 import random
 
 # ========================== НАСТРОЙКА СТРАНИЦЫ ==========================
-st.set_page_config(page_title="Цифровая история назначений", page_icon="circle", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="Цифровая история назначений", page_icon="", layout="wide", initial_sidebar_state="collapsed")
 
-# ========================== CSS ==========================
+# ========================== CSS (МЕДИЦИНСКИЙ ТЁМНО-СИНИЙ СТИЛЬ) ==========================
 st.markdown("""
 <style>
-    .stApp { background-color: #F7F9FC !important; }
+    .stApp { background-color: #F0F4FA !important; }
     html, body, [data-testid="stAppViewContainer"], .stMarkdown, label, .stCaption {
         color: #1F2A3E !important; background-color: transparent !important;
     }
-    h1, h2, h3, h4, h5, h6 { color: #1F2A3E !important; font-weight: 600; }
-    .card { background-color: #FFFFFF; border-radius: 16px; padding: 1.5rem; margin-bottom: 1.5rem; 
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid #E8ECF0; }
-    .card-header { font-size: 1.3rem; font-weight: 700; color: #1F2A3E; margin-bottom: 1.5rem; 
-                   padding-bottom: 0.8rem; border-bottom: 3px solid #3B82F6; }
+    h1, h2, h3, h4, h5, h6 { color: #0A2F6C !important; font-weight: 600; }
+    .card { background-color: #FFFFFF; border-radius: 8px; padding: 1.5rem; margin-bottom: 1.5rem; 
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05); border: 1px solid #DCE5F0; }
+    .card-header { font-size: 1.3rem; font-weight: 700; color: #0A2F6C; margin-bottom: 1.5rem; 
+                   padding-bottom: 0.8rem; border-bottom: 2px solid #0A2F6C; }
     .stTextInput input, .stSelectbox div, .stNumberInput input, .stDateInput input, .stTextArea textarea {
-        background-color: #FFFFFF !important; color: #1F2A3E !important; border: 1px solid #D1D9E8 !important; border-radius: 8px !important;
+        background-color: #FFFFFF !important; color: #1F2A3E !important; border: 1px solid #D1D9E8 !important; border-radius: 4px !important;
     }
-    .stButton button { background-color: #3B82F6 !important; color: #FFFFFF !important; border-radius: 8px !important; 
-                       border: none !important; font-weight: 600 !important; padding: 0.5rem 1rem !important; }
-    .stButton button:hover { background-color: #2563EB !important; }
+    .stButton button { background-color: #0A2F6C !important; color: #FFFFFF !important; border-radius: 4px !important; 
+                       border: none !important; font-weight: 500 !important; padding: 0.5rem 1rem !important; }
+    .stButton button:hover { background-color: #1E3A8A !important; }
     table { width: 100%; border-collapse: collapse; }
-    th { background-color: #F0F2F5; color: #1F2A3E; padding: 1rem; text-align: left; font-weight: 600; border-bottom: 2px solid #3B82F6; }
-    td { padding: 1rem; border-bottom: 1px solid #E8ECF0; color: #1F2A3E; }
-    .stTabs [data-baseweb="tab-list"] { background-color: #FFFFFF; border-bottom: 2px solid #E8ECF0; }
-    .stTabs [data-baseweb="tab"] { color: #6B7280; font-weight: 600; }
-    .stTabs [aria-selected="true"] { color: #3B82F6 !important; }
+    th { background-color: #E6EDF6; color: #0A2F6C; padding: 0.8rem; text-align: left; font-weight: 600; border-bottom: 2px solid #0A2F6C; }
+    td { padding: 0.8rem; border-bottom: 1px solid #DCE5F0; color: #1F2A3E; }
+    .stTabs [data-baseweb="tab-list"] { background-color: #FFFFFF; border-bottom: 1px solid #DCE5F0; }
+    .stTabs [data-baseweb="tab"] { color: #4B5563; font-weight: 500; }
+    .stTabs [aria-selected="true"] { color: #0A2F6C !important; border-bottom-color: #0A2F6C !important; }
     .breadcrumb { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; font-size: 0.9rem; color: #6B7280; }
-    .breadcrumb span { color: #3B82F6; font-weight: 600; }
-    .user-info { font-size: 0.9rem; color: #6B7280; }
-    .user-info strong { color: #1F2A3E; }
+    .breadcrumb span:last-child { color: #0A2F6C; font-weight: 600; }
+    .user-info { font-size: 0.9rem; color: #4B5563; }
+    .user-info strong { color: #0A2F6C; }
+    /* убираем иконки во вкладках */
+    .stTabs [data-baseweb="tab"] svg {
+        display: none;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -270,15 +274,15 @@ def render_top_bar(username, role):
             st.rerun()
 
 def render_chat_panel(patient_id, current_user):
-    st.subheader("💬 Онлайн-чат")
+    st.subheader("Онлайн-чат")
     messages = get_messages(patient_id)
     for sender, msg, timestamp in messages:
         time_obj = datetime.fromisoformat(timestamp)
         time_str = time_obj.strftime("%H:%M")
         if sender == current_user:
-            st.markdown(f"<div style='text-align: right; margin-bottom: 1rem;'><div style='display: inline-block; background-color: #3B82F6; color: white; padding: 0.75rem; border-radius: 12px; max-width: 70%;'><div>{msg}</div><div style='font-size: 0.75rem; opacity: 0.7; margin-top: 0.25rem;'>{time_str}</div></div></div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='text-align: right; margin-bottom: 1rem;'><div style='display: inline-block; background-color: #0A2F6C; color: white; padding: 0.75rem; border-radius: 8px; max-width: 70%;'><div>{msg}</div><div style='font-size: 0.75rem; opacity: 0.7; margin-top: 0.25rem;'>{time_str}</div></div></div>", unsafe_allow_html=True)
         else:
-            st.markdown(f"<div style='text-align: left; margin-bottom: 1rem;'><div style='display: inline-block; background-color: #F0F2F5; color: #1F2A3E; padding: 0.75rem; border-radius: 12px; max-width: 70%;'><div><strong>{sender}</strong></div><div>{msg}</div><div style='font-size: 0.75rem; opacity: 0.7; margin-top: 0.25rem;'>{time_str}</div></div></div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='text-align: left; margin-bottom: 1rem;'><div style='display: inline-block; background-color: #F0F2F5; color: #1F2A3E; padding: 0.75rem; border-radius: 8px; max-width: 70%;'><div><strong>{sender}</strong></div><div>{msg}</div><div style='font-size: 0.75rem; opacity: 0.7; margin-top: 0.25rem;'>{time_str}</div></div></div>", unsafe_allow_html=True)
     
     col1, col2 = st.columns([0.85, 0.15])
     with col1:
@@ -293,7 +297,7 @@ def render_chat_panel(patient_id, current_user):
 def drug_analytics_dashboard():
     render_breadcrumb(["Врач", "Аналитика", "Препараты"])
     
-    st.markdown('<div class="card"><div class="card-header">📊 Аналитика лекарственных препаратов</div>', unsafe_allow_html=True)
+    st.markdown('<div class="card"><div class="card-header">Аналитика лекарственных препаратов</div>', unsafe_allow_html=True)
     
     # Получаем все назначения
     prescriptions = get_all_prescriptions()
@@ -320,18 +324,17 @@ def drug_analytics_dashboard():
     st.divider()
     
     # Вкладки аналитики
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Топ препаратов", "Распределение по дозировке", "Частота назначения", "Анализ по группам", "Статистика"]
-    )
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Топ препаратов", "Распределение по дозировке", "Частота назначения", "Анализ по группам", "Статистика"])
     
     with tab1:
-        st.subheader("ТОП 15 НАЗНАЧЕННЫХ ПРЕПАРАТОВ")
+        st.subheader("Топ 15 назначенных препаратов")
         top_drugs = df["Препарат"].value_counts().head(15)
         fig = px.bar(
             x=top_drugs.values,
             y=top_drugs.index,
             orientation='h',
             color=top_drugs.values,
-            color_continuous_scale='Viridis',
+            color_continuous_scale='Blues',
             labels={'x': 'Количество назначений', 'y': 'Препарат'},
             title="Самые часто назначаемые препараты"
         )
@@ -343,19 +346,19 @@ def drug_analytics_dashboard():
         st.write(f"- Средняя популярность препарата: **{top_drugs.mean():.1f}** назначений")
     
     with tab2:
-        st.subheader("РАСПРЕДЕЛЕНИЕ ПО ДОЗИРОВКЕ")
+        st.subheader("Распределение по дозировке")
         dosage_counts = df["Дозировка"].value_counts().head(10)
         fig = go.Figure(data=[
             go.Pie(labels=dosage_counts.index, values=dosage_counts.values, 
-                   marker=dict(colors=px.colors.qualitative.Set3))
+                   marker=dict(colors=px.colors.sequential.Blues_r))
         ])
         fig.update_layout(title="Распределение дозировок в назначениях", height=500)
         st.plotly_chart(fig, use_container_width=True)
     
     with tab3:
-        st.subheader("ЧАСТОТА НАЗНАЧЕНИЯ")
+        st.subheader("Частота назначения")
         freq_counts = df["Регулярность"].value_counts()
-        colors_map = {"1 раз в день": "#3B82F6", "2 раза в день": "#10B981", "3 раза в день": "#F59E0B"}
+        colors_map = {"1 раз в день": "#0A2F6C", "2 раза в день": "#1E3A8A", "3 раза в день": "#3B82F6"}
         fig = go.Figure(data=[
             go.Bar(
                 x=freq_counts.index,
@@ -378,7 +381,7 @@ def drug_analytics_dashboard():
             st.write(f"- **{freq}**: {count} назначений ({percentage:.1f}%)")
     
     with tab4:
-        st.subheader("АНАЛИЗ ПО ГРУППАМ ПРЕПАРАТОВ")
+        st.subheader("Анализ по группам препаратов")
         
         # Категоризируем препараты
         drug_groups = {
@@ -404,7 +407,7 @@ def drug_analytics_dashboard():
             values=list(group_counts.values()),
             names=list(group_counts.keys()),
             title="Распределение препаратов по группам",
-            color_discrete_sequence=px.colors.qualitative.Plotly
+            color_discrete_sequence=px.colors.sequential.Blues_r
         )
         st.plotly_chart(fig, use_container_width=True)
         
@@ -414,7 +417,7 @@ def drug_analytics_dashboard():
             st.write(f"- **{group}**: {count} назначений ({percentage:.1f}%)")
     
     with tab5:
-        st.subheader("СТАТИСТИЧЕСКИЙ АНАЛИЗ")
+        st.subheader("Статистический анализ")
         
         col1, col2 = st.columns(2)
         
@@ -445,7 +448,7 @@ def drug_analytics_dashboard():
             y=timeline["Количество"],
             mode='lines+markers',
             name='Назначения',
-            line=dict(color='#3B82F6', width=3),
+            line=dict(color='#0A2F6C', width=3),
             marker=dict(size=10)
         ))
         fig.update_layout(
@@ -461,7 +464,7 @@ def drug_analytics_dashboard():
 
 # ========================== СТРАНИЦА ВРАЧА ==========================
 def doctor_dashboard():
-    st.markdown("# 👨‍⚕️ Дашборд врача")
+    st.markdown("# Дашборд врача")
     render_top_bar(st.session_state.get('user_name'), st.session_state.get('role'))
     st.divider()
     
@@ -504,7 +507,7 @@ def doctor_dashboard():
                 cols[4].write(location)
                 cols[5].write(drugs if len(drugs) < 30 else drugs[:27] + "...")
                 
-                if cols[6].button("✏️", key=f"edit_{pid}"):
+                if cols[6].button("Ред.", key=f"edit_{pid}"):
                     st.session_state['edit_patient_id'] = pid
                     st.session_state['page'] = 'doctor_edit'
                     st.rerun()
@@ -557,7 +560,7 @@ def doctor_edit_patient():
     new_policy = st.text_input("Полис", value=patient[4] or "")
     
     st.divider()
-    st.subheader("💊 Препараты")
+    st.subheader("Препараты")
     
     if 'edit_prescriptions_list' not in st.session_state or st.session_state.get('edit_patient_id_prev') != pid:
         st.session_state['edit_prescriptions_list'] = [[p[1], p[2], p[3]] for p in prescs]
@@ -570,23 +573,23 @@ def doctor_edit_patient():
         drug = col1.text_input(f"Препарат", value=item[0], key=f"drug_edit_{idx}")
         dose = col2.text_input(f"мг", value=item[1], key=f"dose_edit_{idx}")
         reg = col3.text_input(f"Регулярность", value=item[2], key=f"reg_edit_{idx}")
-        if col4.button("🗑", key=f"del_edit_{idx}"):
+        if col4.button("Удал.", key=f"del_edit_{idx}"):
             items.pop(idx)
             st.rerun()
         items[idx] = [drug, dose, reg]
     
-    if st.button("➕ Добавить препарат"):
+    if st.button("+ Добавить препарат"):
         items.append(["", "", ""])
         st.rerun()
     
     st.divider()
-    st.subheader("💬 Чат")
+    st.subheader("Чат")
     render_chat_panel(pid, st.session_state.get('user_name'))
     
     st.divider()
     col1, col2 = st.columns([0.5, 0.5])
     with col1:
-        if st.button("💾 Сохранить"):
+        if st.button("Сохранить"):
             valid = [(d[0], d[1], d[2]) for d in items if d[0].strip()]
             save_patient(pid, new_last, new_first, new_birth.isoformat(), new_policy, new_location, valid)
             st.success("Сохранено")
@@ -596,7 +599,7 @@ def doctor_edit_patient():
             st.rerun()
     
     with col2:
-        if st.button("← Назад"):
+        if st.button("Назад"):
             st.session_state['page'] = 'doctor_dashboard'
             st.rerun()
     
@@ -604,7 +607,7 @@ def doctor_edit_patient():
 
 # ========================== СТРАНИЦА ПАЦИЕНТА ==========================
 def patient_dashboard():
-    st.markdown("# 👤 Мой медицинский кабинет")
+    st.markdown("# Мой медицинский кабинет")
     render_top_bar(st.session_state.get('user_name'), st.session_state.get('role'))
     st.divider()
     
@@ -626,7 +629,7 @@ def patient_dashboard():
     st.markdown('</div>', unsafe_allow_html=True)
     st.divider()
     
-    st.markdown('<div class="card"><div class="card-header">💊 Мои назначения</div>', unsafe_allow_html=True)
+    st.markdown('<div class="card"><div class="card-header">Мои назначения</div>', unsafe_allow_html=True)
     
     if not prescs:
         st.info("Нет рецептов")
