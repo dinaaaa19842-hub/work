@@ -50,7 +50,7 @@ st.markdown("""
     .breadcrumb button:hover { color: #0A2F6C !important; background: none !important; }
     .breadcrumb span { color: #0A2F6C; font-weight: 600; }
     
-    .user-info { font-size: 0.9rem; color: #4B5563; }
+    .user-info { font-size: 0.9rem; color: #4B5563; text-align: right; }
     .user-info strong { color: #0A2F6C; }
     
     .app-header {
@@ -107,6 +107,33 @@ st.markdown("""
         font-size: 0.7rem;
         opacity: 0.7;
         margin-top: 0.25rem;
+    }
+    
+    /* Стили для бокового меню (бургер) */
+    [data-testid="stSidebar"] {
+        background-color: #0A2F6C;
+    }
+    [data-testid="stSidebar"] .stMarkdown, 
+    [data-testid="stSidebar"] .stButton button {
+        color: #FFFFFF !important;
+    }
+    [data-testid="stSidebar"] .stButton button {
+        background-color: #1E3A8A !important;
+        border: none;
+        text-align: left;
+        margin-bottom: 0.5rem;
+    }
+    [data-testid="stSidebar"] .stButton button:hover {
+        background-color: #2E4A8E !important;
+    }
+    [data-testid="stSidebar"] h2, [data-testid="stSidebar"] .stMarkdown h2 {
+        color: #FFFFFF !important;
+    }
+    /* Контейнер для прижатия кнопки выхода вниз */
+    .sidebar-content {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -338,7 +365,6 @@ def render_breadcrumb(path, page_map):
     path: список названий страниц (например, ["Врач", "Пациенты"])
     page_map: словарь соответствия названия -> страница в session_state
     """
-    # Отображаем текст хлебных крошек для визуального отображения
     breadcrumb_html = '<div class="breadcrumb">'
     for i, item in enumerate(path):
         if i == len(path) - 1:
@@ -348,14 +374,12 @@ def render_breadcrumb(path, page_map):
     breadcrumb_html += '</div>'
     st.markdown(breadcrumb_html, unsafe_allow_html=True)
     
-    # Создаём кнопки навигации только если элементов больше одного
     if len(path) > 1:
         cols = st.columns(len(path)-1)
         for i, item in enumerate(path[:-1]):
             target_page = page_map.get(item, 'doctor_dashboard')
             if cols[i].button(item, key=f"crumb_{i}_{item}_{target_page}"):
                 st.session_state['page'] = target_page
-                # Сброс временных переменных при возврате на дашборд
                 if target_page == 'doctor_dashboard':
                     if 'chat_patient_id' in st.session_state:
                         del st.session_state['chat_patient_id']
@@ -364,14 +388,8 @@ def render_breadcrumb(path, page_map):
                 st.rerun()
 
 def render_top_bar(username, role):
-    col1, col2 = st.columns([0.85, 0.15])
-    with col1:
-        st.markdown(f"<div class='user-info'>Добро пожаловать, <strong>{username}</strong> ({role.upper()})</div>", unsafe_allow_html=True)
-    with col2:
-        if st.button("ВЫХОД", use_container_width=True):
-            st.session_state['authenticated'] = False
-            st.session_state.clear()
-            st.rerun()
+    # Отображаем только приветствие, кнопка выхода перенесена в sidebar
+    st.markdown(f"<div class='user-info'>Добро пожаловать, <strong>{username}</strong> ({role.upper()})</div>", unsafe_allow_html=True)
 
 def render_footer():
     st.markdown('<div class="app-footer">Цифровая история назначений</div>', unsafe_allow_html=True)
@@ -386,13 +404,11 @@ def doctor_chat_page():
     patient, _ = get_patient_by_id(pid)
     full_name = f"{patient[1]} {patient[2]}"
     
-    # Хлебные крошки для чата
     path_map = {"Врач": "doctor_dashboard", "Пациенты": "doctor_dashboard", "Чат": "doctor_chat"}
     render_breadcrumb(["Врач", "Пациенты", "Чат"], path_map)
     
     st.markdown(f'<div class="card"><div class="card-header">Чат с пациентом {full_name}</div>', unsafe_allow_html=True)
     
-    # Отображение сообщений
     messages = get_messages(pid)
     if not messages:
         st.info("Нет сообщений. Напишите пациенту.")
@@ -400,7 +416,7 @@ def doctor_chat_page():
     for sender, msg, timestamp in messages:
         time_obj = datetime.fromisoformat(timestamp)
         time_str = time_obj.strftime("%H:%M")
-        if sender == st.session_state.get('user_name'):  # сообщение от врача
+        if sender == st.session_state.get('user_name'):
             st.markdown(f"""
             <div class="chat-message-user">
                 <div>
@@ -420,7 +436,6 @@ def doctor_chat_page():
             """, unsafe_allow_html=True)
     
     st.divider()
-    # Поле для нового сообщения
     col1, col2 = st.columns([0.85, 0.15])
     with col1:
         new_msg = st.text_area("Ваше сообщение:", key="chat_input", height=100, label_visibility="collapsed", placeholder="Напишите сообщение пациенту...")
@@ -596,23 +611,31 @@ def drug_analytics_dashboard():
     
     st.markdown('</div>', unsafe_allow_html=True)
 
-# ========================== СТРАНИЦА ВРАЧА (С БОКОВЫМ МЕНЮ) ==========================
+# ========================== СТРАНИЦА ВРАЧА (С БОКОВЫМ МЕНЮ И ВЫХОДОМ ВНИЗУ) ==========================
 def doctor_dashboard():
     st.markdown('<div class="app-header"><div class="logo">Цифровая история назначений</div></div>', unsafe_allow_html=True)
     render_top_bar(st.session_state.get('user_name'), st.session_state.get('role'))
 
-    # Боковое меню (бургер-меню)
+    if 'doctor_selected_tab' not in st.session_state:
+        st.session_state.doctor_selected_tab = "Пациенты"
+
+    # Боковое меню
     with st.sidebar:
         st.markdown("## Навигация")
-        selected_tab = st.radio(
-            "Выберите раздел",
-            options=["Пациенты", "Ранее выписанные", "Отсроченное обслуживание", "Наличие ЛП", "Аналитика"],
-            index=0,
-            key="doctor_sidebar_tab"
-        )
+        for tab in ["Пациенты", "Ранее выписанные", "Отсроченное обслуживание", "Наличие ЛП", "Аналитика"]:
+            if st.button(tab, key=f"sidebar_{tab}", use_container_width=True):
+                st.session_state.doctor_selected_tab = tab
+                st.rerun()
         st.markdown("---")
+        # Добавляем пустое пространство, чтобы кнопка выхода была внизу
+        st.markdown("<div style='flex-grow: 1;'></div>", unsafe_allow_html=True)
+        # Кнопка выхода
+        if st.button("ВЫХОД", key="logout_btn", use_container_width=True):
+            st.session_state['authenticated'] = False
+            st.session_state.clear()
+            st.rerun()
 
-    # Хлебные крошки (для навигации внутри раздела)
+    selected_tab = st.session_state.doctor_selected_tab
     path_map = {"Врач": "doctor_dashboard"}
     render_breadcrumb(["Врач", selected_tab], path_map)
 
@@ -686,6 +709,7 @@ def doctor_dashboard():
 
     render_footer()
 
+# ========================== РЕДАКТИРОВАНИЕ ПАЦИЕНТА ==========================
 def doctor_edit_patient():
     pid = st.session_state.get('edit_patient_id')
     if not pid:
