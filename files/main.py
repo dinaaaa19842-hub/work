@@ -26,7 +26,6 @@ st.markdown("""
     .card-header { font-size: 1.3rem; font-weight: 700; color: #0A2F6C; margin-bottom: 1.5rem; 
                    padding-bottom: 0.8rem; border-bottom: 2px solid #0A2F6C; }
     
-    /* Стили для полей ввода (логин, пароль) – без selectbox */
     .stTextInput input, .stNumberInput input, .stDateInput input, .stTextArea textarea {
         background-color: #FFFFFF !important;
         color: #1F2A3E !important;
@@ -46,7 +45,11 @@ st.markdown("""
     .stTabs [data-baseweb="tab"] svg { display: none; }
     
     .breadcrumb { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; font-size: 0.9rem; color: #6B7280; }
-    .breadcrumb span:last-child { color: #0A2F6C; font-weight: 600; }
+    .breadcrumb button { background: none !important; border: none !important; color: #6B7280 !important; 
+                         padding: 0 !important; font-size: 0.9rem !important; font-weight: normal !important; }
+    .breadcrumb button:hover { color: #0A2F6C !important; background: none !important; }
+    .breadcrumb span { color: #0A2F6C; font-weight: 600; }
+    
     .user-info { font-size: 0.9rem; color: #4B5563; }
     .user-info strong { color: #0A2F6C; }
     
@@ -73,7 +76,37 @@ st.markdown("""
         text-align: left;
     }
     .login-header {
-        margin-bottom: 5 rem !important;
+        margin-bottom: 6rem !important;
+    }
+    /* Стили для чата */
+    .chat-message-user {
+        text-align: right;
+        margin-bottom: 1rem;
+    }
+    .chat-message-user div {
+        display: inline-block;
+        background-color: #0A2F6C;
+        color: white;
+        padding: 0.75rem;
+        border-radius: 12px 12px 4px 12px;
+        max-width: 70%;
+    }
+    .chat-message-assistant {
+        text-align: left;
+        margin-bottom: 1rem;
+    }
+    .chat-message-assistant div {
+        display: inline-block;
+        background-color: #F0F2F5;
+        color: #1F2A3E;
+        padding: 0.75rem;
+        border-radius: 12px 12px 12px 4px;
+        max-width: 70%;
+    }
+    .chat-time {
+        font-size: 0.7rem;
+        opacity: 0.7;
+        margin-top: 0.25rem;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -122,7 +155,7 @@ def init_db():
     
     conn.commit()
     
-    # Тестовые данные (50+ пациентов)
+    # Тестовые пациенты и сообщения
     first_names_m = ["Иван", "Петр", "Сергей", "Александр", "Виктор", "Дмитрий", "Павел", "Андрей", "Владимир", "Николай", "Алексей", "Константин", "Валентин", "Игорь", "Анатолий", "Евгений", "Борис", "Вячеслав", "Валерий", "Юрий"]
     first_names_f = ["Анна", "Мария", "Елена", "Ольга", "Юлия", "Наталья", "Татьяна", "Галина", "Валентина", "Светлана", "Людмила", "Нина", "Раиса", "Вера", "Зинаида", "Маргарита", "Александра", "Ирина", "Виктория", "Екатерина"]
     
@@ -141,6 +174,7 @@ def init_db():
         ("Ибупрофен", "200 мг"), ("Парацетамол", "500 мг"), ("Аспирин", "500 мг"),
     ]
     
+    # Добавляем пациентов
     for i in range(50):
         gender = random.choice(["M", "F"])
         first_name = random.choice(first_names_m if gender == "M" else first_names_f)
@@ -170,6 +204,24 @@ def init_db():
                        (patient_id, drug_name, dosage, regularity, start_date, end_date)
                        VALUES (?,?,?,?,?,?)''',
                      (pid, drug_name, dosage, regularity, start_date, end_date))
+        
+        # Добавляем тестовое сообщение от пациента для первых 10 пациентов
+        if i < 10:
+            test_messages = [
+                "Добрый день! Подскажите, как правильно принимать Энап?",
+                "Здравствуйте, у меня болит голова после приема аспирина, это нормально?",
+                "Доктор, можно ли заменить Метформин на другой препарат?",
+                "Когда будет готов результат анализа?",
+                "Как часто нужно измерять давление?",
+                "Спасибо за назначение, чувствую себя лучше!",
+                "Что делать, если пропустил приём таблетки?",
+                "Есть ли побочные эффекты у нового лекарства?",
+                "Можно ли сочетать эти препараты с алкоголем?",
+                "Повысилось давление, что делать?"
+            ]
+            msg_text = random.choice(test_messages)
+            c.execute("INSERT INTO messages (patient_id, sender, message, timestamp) VALUES (?,?,?,?)",
+                     (pid, f"{first_name} {last_name}", msg_text, (datetime.now() - timedelta(days=random.randint(1, 5))).isoformat()))
     
     conn.commit()
     conn.close()
@@ -280,15 +332,37 @@ def get_all_prescriptions():
     return data
 
 # ========================== КОМПОНЕНТЫ UI ==========================
-def render_breadcrumb(path):
+def render_breadcrumb(path, page_map):
+    """
+    Отображает кликабельные хлебные крошки.
+    path: список названий страниц (например, ["Врач", "Пациенты"])
+    page_map: словарь соответствия названия -> страница в session_state
+    """
     breadcrumb_html = '<div class="breadcrumb">'
     for i, item in enumerate(path):
         if i == len(path) - 1:
             breadcrumb_html += f'<span>{item}</span>'
         else:
-            breadcrumb_html += f'<span>{item}</span> > '
+            # Создаём кнопку, которая меняет страницу
+            target_page = page_map.get(item, 'doctor_dashboard')
+            breadcrumb_html += f'<button onclick="window.parent.document.querySelector(\'button\').click();" ' \
+                               f'onclick="return false;" data-testid="breadcrumb_{i}">{item}</button> > '
     breadcrumb_html += '</div>'
     st.markdown(breadcrumb_html, unsafe_allow_html=True)
+    
+    # Обработчик кликов через Streamlit (альтернативный способ)
+    cols = st.columns(len(path)-1)
+    for i, item in enumerate(path[:-1]):
+        if cols[i].button(item, key=f"crumb_{i}"):
+            target_page = page_map.get(item, 'doctor_dashboard')
+            st.session_state['page'] = target_page
+            if target_page == 'doctor_dashboard':
+                # Если возврат на дашборд, сбрасываем id пациента для чата/редактирования
+                if 'chat_patient_id' in st.session_state:
+                    del st.session_state['chat_patient_id']
+                if 'edit_patient_id' in st.session_state:
+                    del st.session_state['edit_patient_id']
+            st.rerun()
 
 def render_top_bar(username, role):
     col1, col2 = st.columns([0.85, 0.15])
@@ -300,32 +374,70 @@ def render_top_bar(username, role):
             st.session_state.clear()
             st.rerun()
 
-def render_chat_panel(patient_id, current_user):
-    st.subheader("Онлайн-чат")
-    messages = get_messages(patient_id)
-    for sender, msg, timestamp in messages:
-        time_obj = datetime.fromisoformat(timestamp)
-        time_str = time_obj.strftime("%H:%M")
-        if sender == current_user:
-            st.markdown(f"<div style='text-align: right; margin-bottom: 1rem;'><div style='display: inline-block; background-color: #0A2F6C; color: white; padding: 0.75rem; border-radius: 8px; max-width: 70%;'><div>{msg}</div><div style='font-size: 0.75rem; opacity: 0.7; margin-top: 0.25rem;'>{time_str}</div></div></div>", unsafe_allow_html=True)
-        else:
-            st.markdown(f"<div style='text-align: left; margin-bottom: 1rem;'><div style='display: inline-block; background-color: #F0F2F5; color: #1F2A3E; padding: 0.75rem; border-radius: 8px; max-width: 70%;'><div><strong>{sender}</strong></div><div>{msg}</div><div style='font-size: 0.75rem; opacity: 0.7; margin-top: 0.25rem;'>{time_str}</div></div></div>", unsafe_allow_html=True)
-    
-    col1, col2 = st.columns([0.85, 0.15])
-    with col1:
-        new_msg = st.text_input("Ваше сообщение:", key=f"msg_{patient_id}", label_visibility="collapsed")
-    with col2:
-        if st.button("Отправить", key=f"send_{patient_id}", use_container_width=True):
-            if new_msg.strip():
-                add_message(patient_id, st.session_state.get('user_name', 'Врач'), new_msg)
-                st.rerun()
-
 def render_footer():
     st.markdown('<div class="app-footer">Цифровая история назначений</div>', unsafe_allow_html=True)
 
+# ========================== ЧАТ (ОТДЕЛЬНАЯ СТРАНИЦА) ==========================
+def doctor_chat_page():
+    pid = st.session_state.get('chat_patient_id')
+    if not pid:
+        st.session_state['page'] = 'doctor_dashboard'
+        st.rerun()
+    
+    patient, _ = get_patient_by_id(pid)
+    full_name = f"{patient[1]} {patient[2]}"
+    
+    # Хлебные крошки для чата
+    path_map = {"Врач": "doctor_dashboard", "Пациенты": "doctor_dashboard", "Чат": "doctor_chat"}
+    render_breadcrumb(["Врач", "Пациенты", "Чат"], path_map)
+    
+    st.markdown(f'<div class="card"><div class="card-header">Чат с пациентом {full_name}</div>', unsafe_allow_html=True)
+    
+    # Отображение сообщений
+    messages = get_messages(pid)
+    if not messages:
+        st.info("Нет сообщений. Напишите пациенту.")
+    
+    for sender, msg, timestamp in messages:
+        time_obj = datetime.fromisoformat(timestamp)
+        time_str = time_obj.strftime("%H:%M")
+        if sender == st.session_state.get('user_name'):  # сообщение от врача
+            st.markdown(f"""
+            <div class="chat-message-user">
+                <div>
+                    <div>{msg}</div>
+                    <div class="chat-time">{time_str}</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown(f"""
+            <div class="chat-message-assistant">
+                <div>
+                    <div><strong>{sender}</strong><br>{msg}</div>
+                    <div class="chat-time">{time_str}</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+    
+    st.divider()
+    # Поле для нового сообщения
+    col1, col2 = st.columns([0.85, 0.15])
+    with col1:
+        new_msg = st.text_area("Ваше сообщение:", key="chat_input", height=100, label_visibility="collapsed", placeholder="Напишите сообщение пациенту...")
+    with col2:
+        if st.button("Отправить", use_container_width=True):
+            if new_msg.strip():
+                add_message(pid, st.session_state.get('user_name', 'Врач'), new_msg)
+                st.rerun()
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    render_footer()
+
 # ========================== АНАЛИТИКА ПРЕПАРАТОВ ==========================
 def drug_analytics_dashboard():
-    render_breadcrumb(["Врач", "Аналитика", "Препараты"])
+    path_map = {"Врач": "doctor_dashboard", "Аналитика": "doctor_dashboard", "Препараты": "doctor_dashboard"}
+    render_breadcrumb(["Врач", "Аналитика", "Препараты"], path_map)
     
     st.markdown('<div class="card"><div class="card-header">Аналитика лекарственных препаратов</div>', unsafe_allow_html=True)
     
@@ -490,15 +602,17 @@ def doctor_dashboard():
     st.markdown('<div class="app-header"><div class="logo">Цифровая история назначений</div></div>', unsafe_allow_html=True)
     render_top_bar(st.session_state.get('user_name'), st.session_state.get('role'))
     
+    path_map = {"Врач": "doctor_dashboard"}
+    render_breadcrumb(["Врач"], path_map)
+    
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["Пациенты", "Ранее выписанные", "Отсроченное обслуживание", "Наличие ЛП", "Аналитика"])
     
     with tab1:
-        render_breadcrumb(["Врач", "Пациенты"])
         st.markdown('<div class="card"><div class="card-header">Список пациентов</div>', unsafe_allow_html=True)
         
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            search_name = st.text_input("Поиск по ФИО", placeholder="Иванов")
+            search_name = st.text_input("Поиск по ФИ", placeholder="Иванов")
         with col2:
             birth_filter = st.text_input("Дата рождения (ГГГГ-ММ-ДД)", placeholder="1980-05-15")
         with col3:
@@ -511,8 +625,8 @@ def doctor_dashboard():
         if not patients:
             st.info("Пациенты не найдены")
         else:
-            cols_header = st.columns([0.5, 1, 1, 1.2, 2, 1, 0.8])
-            for col, header in zip(cols_header, ["ID", "Фамилия", "Имя", "Дата рожд", "Местоположение", "Препараты", "Действия"]):
+            cols_header = st.columns([0.5, 1, 1, 1.2, 2, 0.8, 0.8, 0.8])
+            for col, header in zip(cols_header, ["ID", "Фамилия", "Имя", "Дата рожд", "Местоположение", "Препараты", "Чат", "Действия"]):
                 col.markdown(f"**{header}**")
             
             st.divider()
@@ -521,7 +635,7 @@ def doctor_dashboard():
                 _, prescs = get_patient_by_id(pid)
                 drugs = ", ".join([p[1] for p in prescs]) if prescs else "Нет"
                 
-                cols = st.columns([0.5, 1, 1, 1.2, 2, 1, 0.8])
+                cols = st.columns([0.5, 1, 1, 1.2, 2, 0.8, 0.8, 0.8])
                 cols[0].write(str(pid))
                 cols[1].write(last_name)
                 cols[2].write(first_name)
@@ -529,7 +643,13 @@ def doctor_dashboard():
                 cols[4].write(location)
                 cols[5].write(drugs if len(drugs) < 30 else drugs[:27] + "...")
                 
-                if cols[6].button("Ред.", key=f"edit_{pid}"):
+                # Кнопка чата
+                if cols[6].button("💬", key=f"chat_{pid}", help="Чат с пациентом"):
+                    st.session_state['chat_patient_id'] = pid
+                    st.session_state['page'] = 'doctor_chat'
+                    st.rerun()
+                
+                if cols[7].button("Ред.", key=f"edit_{pid}"):
                     st.session_state['edit_patient_id'] = pid
                     st.session_state['page'] = 'doctor_edit'
                     st.rerun()
@@ -537,19 +657,20 @@ def doctor_dashboard():
         st.markdown('</div>', unsafe_allow_html=True)
     
     with tab2:
-        render_breadcrumb(["Врач", "Ранее выписанные рецепты"])
+        path_map_tab2 = {"Врач": "doctor_dashboard", "Ранее выписанные": "doctor_dashboard"}
+        render_breadcrumb(["Врач", "Ранее выписанные рецепты"], path_map_tab2)
         st.markdown('<div class="card"><div class="card-header">История рецептов</div>', unsafe_allow_html=True)
         st.info("Здесь отображаются ранее выписанные рецепты")
         st.markdown('</div>', unsafe_allow_html=True)
     
     with tab3:
-        render_breadcrumb(["Врач", "Отсроченное обслуживание"])
+        render_breadcrumb(["Врач", "Отсроченное обслуживание"], path_map)
         st.markdown('<div class="card"><div class="card-header">Рецепты на отсроченном обслуживании</div>', unsafe_allow_html=True)
         st.info("Рецепты, которые пациент может получить позже")
         st.markdown('</div>', unsafe_allow_html=True)
     
     with tab4:
-        render_breadcrumb(["Врач", "Наличие ЛП"])
+        render_breadcrumb(["Врач", "Наличие ЛП"], path_map)
         st.markdown('<div class="card"><div class="card-header">Проверка наличия в аптеках</div>', unsafe_allow_html=True)
         drug_name = st.text_input("Введите название препарата")
         if drug_name:
@@ -568,7 +689,8 @@ def doctor_edit_patient():
         st.rerun()
     
     patient, prescs = get_patient_by_id(pid)
-    render_breadcrumb(["Врач", "Пациенты", f"Редактирование: {patient[1]} {patient[2]}"])
+    path_map = {"Врач": "doctor_dashboard", "Пациенты": "doctor_dashboard", "Редактирование": "doctor_edit"}
+    render_breadcrumb(["Врач", "Пациенты", f"Редактирование: {patient[1]} {patient[2]}"], path_map)
     
     st.markdown(f'<div class="card"><div class="card-header">Редактирование: {patient[1]} {patient[2]}</div>', unsafe_allow_html=True)
     render_top_bar(st.session_state.get('user_name'), st.session_state.get('role'))
@@ -607,8 +729,8 @@ def doctor_edit_patient():
         st.rerun()
     
     st.divider()
-    st.subheader("Чат")
-    render_chat_panel(pid, st.session_state.get('user_name'))
+    # Убираем старый чат из редактирования, так как теперь есть отдельная страница чата
+    st.markdown("**Для общения с пациентом используйте специальную страницу чата (кнопка 💬 в списке пациентов).**")
     
     st.divider()
     col1, col2 = st.columns([0.5, 0.5])
@@ -635,7 +757,8 @@ def patient_dashboard():
     st.markdown('<div class="app-header"><div class="logo">Цифровая история назначений</div></div>', unsafe_allow_html=True)
     render_top_bar(st.session_state.get('user_name'), st.session_state.get('role'))
     
-    render_breadcrumb(["Пациент", "Главная"])
+    path_map = {"Пациент": "patient_dashboard"}
+    render_breadcrumb(["Пациент", "Главная"], path_map)
     
     pid = 1
     patient, prescs = get_patient_by_id(pid)
@@ -678,7 +801,6 @@ def login_page():
         username = st.text_input("Логин", placeholder="врач1 или пациент1")
         password = st.text_input("Пароль", type="password", placeholder="пароль")
         
-        # Selectbox для роли, стилизованный как поля ввода
         role = st.selectbox(
             "Роль",
             options=["doctor", "patient"],
@@ -711,6 +833,8 @@ else:
     if role == 'doctor':
         if page == 'doctor_edit':
             doctor_edit_patient()
+        elif page == 'doctor_chat':
+            doctor_chat_page()
         else:
             doctor_dashboard()
     else:
