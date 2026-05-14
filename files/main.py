@@ -25,8 +25,16 @@ st.markdown("""
             box-shadow: 0 1px 2px rgba(0,0,0,0.05); border: 1px solid #DCE5F0; }
     .card-header { font-size: 1.3rem; font-weight: 700; color: #0A2F6C; margin-bottom: 1.5rem; 
                    padding-bottom: 0.8rem; border-bottom: 2px solid #0A2F6C; }
-    .stTextInput input, .stSelectbox div, .stNumberInput input, .stDateInput input, .stTextArea textarea {
-        background-color: #FFFFFF !important; color: #1F2A3E !important; border: 1px solid #D1D9E8 !important; border-radius: 4px !important;
+    .stTextInput input, .stNumberInput input, .stDateInput input, .stTextArea textarea {
+        background-color: #FFFFFF !important;
+        color: #1F2A3E !important;
+        border: 1px solid #D1D9E8 !important;
+        border-radius: 4px !important;
+    }
+    /* Радиокнопки для выбора роли (без фона) */
+    .stRadio div {
+        background-color: transparent !important;
+        border: none !important;
     }
     .stButton button { background-color: #0A2F6C !important; color: #FFFFFF !important; border-radius: 4px !important; 
                        border: none !important; font-weight: 500 !important; padding: 0.5rem 1rem !important; }
@@ -37,15 +45,14 @@ st.markdown("""
     .stTabs [data-baseweb="tab-list"] { background-color: #FFFFFF; border-bottom: 1px solid #DCE5F0; }
     .stTabs [data-baseweb="tab"] { color: #4B5563; font-weight: 500; }
     .stTabs [aria-selected="true"] { color: #0A2F6C !important; border-bottom-color: #0A2F6C !important; }
+    .stTabs [data-baseweb="tab"] svg { display: none; }  /* убираем иконки во вкладках */
+    
     .breadcrumb { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; font-size: 0.9rem; color: #6B7280; }
     .breadcrumb span:last-child { color: #0A2F6C; font-weight: 600; }
     .user-info { font-size: 0.9rem; color: #4B5563; }
     .user-info strong { color: #0A2F6C; }
-    /* убираем иконки во вкладках */
-    .stTabs [data-baseweb="tab"] svg {
-        display: none;
-    }
-    /* НОВОЕ: стили для хедера и футера */
+    
+    /* Хедер и футер */
     .app-header {
         display: flex;
         justify-content: space-between;
@@ -68,6 +75,10 @@ st.markdown("""
         color: #6B7280;
         text-align: left;
     }
+    /* Дополнительный отступ под заголовком на странице входа */
+    .login-header {
+        margin-bottom: 2rem;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -78,13 +89,11 @@ def init_db():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     
-    # Удаляем старые таблицы если существуют
     c.execute("DROP TABLE IF EXISTS patients")
     c.execute("DROP TABLE IF EXISTS prescriptions")
     c.execute("DROP TABLE IF EXISTS messages")
     c.execute("DROP TABLE IF EXISTS intake_log")
     
-    # Создаем правильную структуру
     c.execute('''CREATE TABLE patients
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
                   last_name TEXT, first_name TEXT,
@@ -117,7 +126,7 @@ def init_db():
     
     conn.commit()
     
-    # Добавляем 50+ тестовых пациентов
+    # Тестовые данные (50+ пациентов)
     first_names_m = ["Иван", "Петр", "Сергей", "Александр", "Виктор", "Дмитрий", "Павел", "Андрей", "Владимир", "Николай", "Алексей", "Константин", "Валентин", "Игорь", "Анатолий", "Евгений", "Борис", "Вячеслав", "Валерий", "Юрий"]
     first_names_f = ["Анна", "Мария", "Елена", "Ольга", "Юлия", "Наталья", "Татьяна", "Галина", "Валентина", "Светлана", "Людмила", "Нина", "Раиса", "Вера", "Зинаида", "Маргарита", "Александра", "Ирина", "Виктория", "Екатерина"]
     
@@ -153,7 +162,6 @@ def init_db():
         
         pid = c.lastrowid
         
-        # Добавляем 2-5 случайных препаратов для каждого пациента
         num_drugs = random.randint(2, 5)
         selected_drugs = random.sample(drugs_list, num_drugs)
         
@@ -287,8 +295,6 @@ def render_breadcrumb(path):
     st.markdown(breadcrumb_html, unsafe_allow_html=True)
 
 def render_top_bar(username, role):
-    # НОВОЕ: теперь эта функция используется только для правой части (приветствие + выход)
-    # Хедер строится отдельно в каждой странице
     col1, col2 = st.columns([0.85, 0.15])
     with col1:
         st.markdown(f"<div class='user-info'>Добро пожаловать, <strong>{username}</strong> ({role.upper()})</div>", unsafe_allow_html=True)
@@ -318,7 +324,6 @@ def render_chat_panel(patient_id, current_user):
                 add_message(patient_id, st.session_state.get('user_name', 'Врач'), new_msg)
                 st.rerun()
 
-# НОВОЕ: функция рендера футера
 def render_footer():
     st.markdown('<div class="app-footer">Цифровая история назначений</div>', unsafe_allow_html=True)
 
@@ -328,7 +333,6 @@ def drug_analytics_dashboard():
     
     st.markdown('<div class="card"><div class="card-header">Аналитика лекарственных препаратов</div>', unsafe_allow_html=True)
     
-    # Получаем все назначения
     prescriptions = get_all_prescriptions()
     if not prescriptions:
         st.info("Нет данных для анализа")
@@ -336,7 +340,6 @@ def drug_analytics_dashboard():
     
     df = pd.DataFrame(prescriptions, columns=["Препарат", "Дозировка", "Регулярность", "Дата_начала"])
     
-    # Основные метрики
     st.subheader("Основные показатели")
     col1, col2, col3, col4 = st.columns(4)
     with col1:
@@ -350,7 +353,6 @@ def drug_analytics_dashboard():
     
     st.divider()
     
-    # Вкладки аналитики
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["Топ препаратов", "Распределение по дозировке", "Частота назначения", "Анализ по группам", "Статистика"])
     
     with tab1:
@@ -409,8 +411,6 @@ def drug_analytics_dashboard():
     
     with tab4:
         st.subheader("Анализ по группам препаратов")
-        
-        # Категоризируем препараты
         drug_groups = {
             "Кардиологические": ["Энап", "Метопролол", "Амлодипин", "Варфарин", "Конкор", "Норваск", "Кордарон", "Дигоксин"],
             "Эндокринологические": ["Метформин", "Глюкофаж"],
@@ -491,10 +491,9 @@ def drug_analytics_dashboard():
 
 # ========================== СТРАНИЦА ВРАЧА ==========================
 def doctor_dashboard():
-    # НОВОЕ: хедер с названием продукта и правой панелью пользователя
     st.markdown('<div class="app-header"><div class="logo">Цифровая история назначений</div></div>', unsafe_allow_html=True)
     render_top_bar(st.session_state.get('user_name'), st.session_state.get('role'))
-    # НОВОЕ: убран заголовок "Дашборд врача"
+    # Заголовок "Дашборд врача" убран
     
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["Пациенты", "Ранее выписанные", "Отсроченное обслуживание", "Наличие ЛП", "Аналитика"])
     
@@ -565,7 +564,6 @@ def doctor_dashboard():
     with tab5:
         drug_analytics_dashboard()
     
-    # НОВОЕ: футер
     render_footer()
 
 def doctor_edit_patient():
@@ -635,11 +633,10 @@ def doctor_edit_patient():
             st.rerun()
     
     st.markdown('</div>', unsafe_allow_html=True)
-    render_footer()  # НОВОЕ: футер на странице редактирования
+    render_footer()
 
 # ========================== СТРАНИЦА ПАЦИЕНТА ==========================
 def patient_dashboard():
-    # НОВОЕ: хедер с названием продукта
     st.markdown('<div class="app-header"><div class="logo">Цифровая история назначений</div></div>', unsafe_allow_html=True)
     render_top_bar(st.session_state.get('user_name'), st.session_state.get('role'))
     
@@ -673,21 +670,27 @@ def patient_dashboard():
                 st.write(f"**Период:** {p[4]} – {p[5]}")
     
     st.markdown('</div>', unsafe_allow_html=True)
-    render_footer()  # НОВОЕ: футер
+    render_footer()
 
 # ========================== ВХОД ==========================
 def login_page():
-    st.markdown("# Цифровая история назначений")
-    # НОВОЕ: убран разделитель "---"
-    # НОВОЕ: убрана карточка (белое поле) вокруг формы входа
-    # Просто центрируем форму без дополнительных обёрток
+    # Заголовок с дополнительным отступом (класс login-header)
+    st.markdown('<h1 class="login-header">Цифровая история назначений</h1>', unsafe_allow_html=True)
+    
     col1, col2, col3 = st.columns([1, 1.5, 1])
     with col2:
         st.subheader("Вход в систему")
         
         username = st.text_input("Логин", placeholder="врач1 или пациент1")
         password = st.text_input("Пароль", type="password", placeholder="пароль")
-        role = st.selectbox("Роль", ["doctor", "patient"], format_func=lambda x: "Врач" if x == "doctor" else "Пациент")
+        
+        # Радиокнопки вместо selectbox
+        role = st.radio(
+            "Роль",
+            options=["doctor", "patient"],
+            format_func=lambda x: "Врач" if x == "doctor" else "Пациент",
+            horizontal=True
+        )
         
         if st.button("Войти", use_container_width=True):
             if username and password:
