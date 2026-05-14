@@ -338,17 +338,30 @@ def render_breadcrumb(path, page_map):
     path: список названий страниц (например, ["Врач", "Пациенты"])
     page_map: словарь соответствия названия -> страница в session_state
     """
+    # Отображаем текст хлебных крошек
     breadcrumb_html = '<div class="breadcrumb">'
     for i, item in enumerate(path):
         if i == len(path) - 1:
             breadcrumb_html += f'<span>{item}</span>'
         else:
-            # Создаём кнопку, которая меняет страницу
-            target_page = page_map.get(item, 'doctor_dashboard')
-            breadcrumb_html += f'<button onclick="window.parent.document.querySelector(\'button\').click();" ' \
-                               f'onclick="return false;" data-testid="breadcrumb_{i}">{item}</button> > '
+            breadcrumb_html += f'<span class="crumb-link" data-page="{page_map.get(item, "doctor_dashboard")}">{item}</span> > '
     breadcrumb_html += '</div>'
     st.markdown(breadcrumb_html, unsafe_allow_html=True)
+    
+    # Создаём кнопки только если есть больше одного элемента
+    if len(path) > 1:
+        cols = st.columns(len(path)-1)
+        for i, item in enumerate(path[:-1]):
+            target_page = page_map.get(item, 'doctor_dashboard')
+            if cols[i].button(item, key=f"crumb_{i}_{target_page}"):
+                st.session_state['page'] = target_page
+                # Сброс временных переменных при возврате на дашборд
+                if target_page == 'doctor_dashboard':
+                    if 'chat_patient_id' in st.session_state:
+                        del st.session_state['chat_patient_id']
+                    if 'edit_patient_id' in st.session_state:
+                        del st.session_state['edit_patient_id']
+                st.rerun()
     
     # Обработчик кликов через Streamlit (альтернативный способ)
     cols = st.columns(len(path)-1)
