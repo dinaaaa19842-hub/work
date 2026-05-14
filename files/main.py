@@ -11,7 +11,7 @@ import base64
 import random
 
 # ========================== НАСТРОЙКА СТРАНИЦЫ ==========================
-st.set_page_config(page_title="Цифровая история назначений", page_icon="", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="Цифровая история назначений", page_icon="", layout="wide", initial_sidebar_state="expanded")
 
 # ========================== CSS (МЕДИЦИНСКИЙ ТЁМНО-СИНИЙ СТИЛЬ) ==========================
 st.markdown("""
@@ -596,17 +596,28 @@ def drug_analytics_dashboard():
     
     st.markdown('</div>', unsafe_allow_html=True)
 
-# ========================== СТРАНИЦА ВРАЧА ==========================
+# ========================== СТРАНИЦА ВРАЧА (С БОКОВЫМ МЕНЮ) ==========================
 def doctor_dashboard():
     st.markdown('<div class="app-header"><div class="logo">Цифровая история назначений</div></div>', unsafe_allow_html=True)
     render_top_bar(st.session_state.get('user_name'), st.session_state.get('role'))
-    
+
+    # Боковое меню (бургер-меню)
+    with st.sidebar:
+        st.markdown("## Навигация")
+        selected_tab = st.radio(
+            "Выберите раздел",
+            options=["Пациенты", "Ранее выписанные", "Отсроченное обслуживание", "Наличие ЛП", "Аналитика"],
+            index=0,
+            key="doctor_sidebar_tab"
+        )
+        st.markdown("---")
+
+    # Хлебные крошки (для навигации внутри раздела)
     path_map = {"Врач": "doctor_dashboard"}
-    render_breadcrumb(["Врач"], path_map)
-    
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Пациенты", "Ранее выписанные", "Отсроченное обслуживание", "Наличие ЛП", "Аналитика"])
-    
-    with tab1:
+    render_breadcrumb(["Врач", selected_tab], path_map)
+
+    # Отображение выбранного раздела
+    if selected_tab == "Пациенты":
         st.markdown('<div class="card"><div class="card-header">Список пациентов</div>', unsafe_allow_html=True)
         
         col1, col2, col3, col4 = st.columns(4)
@@ -627,7 +638,6 @@ def doctor_dashboard():
             cols_header = st.columns([0.5, 1, 1, 1.2, 2, 0.8, 0.8, 0.8])
             for col, header in zip(cols_header, ["ID", "Фамилия", "Имя", "Дата рожд", "Местоположение", "Препараты", "Чат", "Действия"]):
                 col.markdown(f"**{header}**")
-            
             st.divider()
             
             for pid, last_name, first_name, birth_date, policy, location in patients:
@@ -642,7 +652,6 @@ def doctor_dashboard():
                 cols[4].write(location)
                 cols[5].write(drugs if len(drugs) < 30 else drugs[:27] + "...")
                 
-                # Кнопка чата
                 if cols[6].button("💬", key=f"chat_{pid}", help="Чат с пациентом"):
                     st.session_state['chat_patient_id'] = pid
                     st.session_state['page'] = 'doctor_chat'
@@ -655,30 +664,26 @@ def doctor_dashboard():
         
         st.markdown('</div>', unsafe_allow_html=True)
     
-    with tab2:
-        path_map_tab2 = {"Врач": "doctor_dashboard", "Ранее выписанные": "doctor_dashboard"}
-        render_breadcrumb(["Врач", "Ранее выписанные рецепты"], path_map_tab2)
+    elif selected_tab == "Ранее выписанные":
         st.markdown('<div class="card"><div class="card-header">История рецептов</div>', unsafe_allow_html=True)
         st.info("Здесь отображаются ранее выписанные рецепты")
         st.markdown('</div>', unsafe_allow_html=True)
     
-    with tab3:
-        render_breadcrumb(["Врач", "Отсроченное обслуживание"], path_map)
+    elif selected_tab == "Отсроченное обслуживание":
         st.markdown('<div class="card"><div class="card-header">Рецепты на отсроченном обслуживании</div>', unsafe_allow_html=True)
         st.info("Рецепты, которые пациент может получить позже")
         st.markdown('</div>', unsafe_allow_html=True)
     
-    with tab4:
-        render_breadcrumb(["Врач", "Наличие ЛП"], path_map)
+    elif selected_tab == "Наличие ЛП":
         st.markdown('<div class="card"><div class="card-header">Проверка наличия в аптеках</div>', unsafe_allow_html=True)
         drug_name = st.text_input("Введите название препарата")
         if drug_name:
             st.info(f"Поиск наличия препарата: {drug_name}")
         st.markdown('</div>', unsafe_allow_html=True)
     
-    with tab5:
+    elif selected_tab == "Аналитика":
         drug_analytics_dashboard()
-    
+
     render_footer()
 
 def doctor_edit_patient():
@@ -728,7 +733,6 @@ def doctor_edit_patient():
         st.rerun()
     
     st.divider()
-    # Убираем старый чат из редактирования, так как теперь есть отдельная страница чата
     st.markdown("**Для общения с пациентом используйте специальную страницу чата (кнопка 💬 в списке пациентов).**")
     
     st.divider()
