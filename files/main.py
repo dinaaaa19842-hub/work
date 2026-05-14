@@ -26,28 +26,12 @@ st.markdown("""
     .card-header { font-size: 1.3rem; font-weight: 700; color: #0A2F6C; margin-bottom: 1.5rem; 
                    padding-bottom: 0.8rem; border-bottom: 2px solid #0A2F6C; }
     
-    /* Общий стиль для полей ввода и select */
-    .stTextInput input, .stNumberInput input, .stDateInput input, .stTextArea textarea, 
-    .stSelectbox div, .stSelectbox select {
+    /* Стили для полей ввода (логин, пароль) – без selectbox */
+    .stTextInput input, .stNumberInput input, .stDateInput input, .stTextArea textarea {
         background-color: #FFFFFF !important;
         color: #1F2A3E !important;
         border: 1px solid #D1D9E8 !important;
         border-radius: 4px !important;
-        padding: 0.5rem !important;
-    }
-    /* Убираем квадратные маркеры и лишние иконки у select */
-    .stSelectbox select {
-        appearance: none;
-        -webkit-appearance: none;
-        -moz-appearance: none;
-        background-image: none !important;
-    }
-    .stSelectbox svg, .stSelectbox [data-baseweb="select"] svg {
-        display: none !important;
-    }
-    /* Выравнивание высоты select */
-    .stSelectbox div[data-baseweb="select"] {
-        min-height: 38px;
     }
     
     .stButton button { background-color: #0A2F6C !important; color: #FFFFFF !important; border-radius: 4px !important; 
