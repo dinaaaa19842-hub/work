@@ -73,7 +73,7 @@ st.markdown("""
         text-align: left;
     }
     .login-header {
-        margin-bottom: 2rem;
+        margin-bottom: 3rem;
     }
 </style>
 """, unsafe_allow_html=True)
