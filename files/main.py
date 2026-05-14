@@ -25,16 +25,15 @@ st.markdown("""
             box-shadow: 0 1px 2px rgba(0,0,0,0.05); border: 1px solid #DCE5F0; }
     .card-header { font-size: 1.3rem; font-weight: 700; color: #0A2F6C; margin-bottom: 1.5rem; 
                    padding-bottom: 0.8rem; border-bottom: 2px solid #0A2F6C; }
-    .stTextInput input, .stNumberInput input, .stDateInput input, .stTextArea textarea {
+    /* Единый стиль для полей ввода и выпадающего списка */
+    .stTextInput input, .stNumberInput input, .stDateInput input, .stTextArea textarea, .stSelectbox div {
         background-color: #FFFFFF !important;
         color: #1F2A3E !important;
         border: 1px solid #D1D9E8 !important;
         border-radius: 4px !important;
     }
-    /* Радиокнопки для выбора роли (без фона) */
-    .stRadio div {
-        background-color: transparent !important;
-        border: none !important;
+    .stSelectbox div[data-baseweb="select"] {
+        min-height: 38px;
     }
     .stButton button { background-color: #0A2F6C !important; color: #FFFFFF !important; border-radius: 4px !important; 
                        border: none !important; font-weight: 500 !important; padding: 0.5rem 1rem !important; }
@@ -45,14 +44,13 @@ st.markdown("""
     .stTabs [data-baseweb="tab-list"] { background-color: #FFFFFF; border-bottom: 1px solid #DCE5F0; }
     .stTabs [data-baseweb="tab"] { color: #4B5563; font-weight: 500; }
     .stTabs [aria-selected="true"] { color: #0A2F6C !important; border-bottom-color: #0A2F6C !important; }
-    .stTabs [data-baseweb="tab"] svg { display: none; }  /* убираем иконки во вкладках */
+    .stTabs [data-baseweb="tab"] svg { display: none; }
     
     .breadcrumb { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; font-size: 0.9rem; color: #6B7280; }
     .breadcrumb span:last-child { color: #0A2F6C; font-weight: 600; }
     .user-info { font-size: 0.9rem; color: #4B5563; }
     .user-info strong { color: #0A2F6C; }
     
-    /* Хедер и футер */
     .app-header {
         display: flex;
         justify-content: space-between;
@@ -75,7 +73,6 @@ st.markdown("""
         color: #6B7280;
         text-align: left;
     }
-    /* Дополнительный отступ под заголовком на странице входа */
     .login-header {
         margin-bottom: 2rem;
     }
@@ -493,7 +490,6 @@ def drug_analytics_dashboard():
 def doctor_dashboard():
     st.markdown('<div class="app-header"><div class="logo">Цифровая история назначений</div></div>', unsafe_allow_html=True)
     render_top_bar(st.session_state.get('user_name'), st.session_state.get('role'))
-    # Заголовок "Дашборд врача" убран
     
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["Пациенты", "Ранее выписанные", "Отсроченное обслуживание", "Наличие ЛП", "Аналитика"])
     
@@ -674,7 +670,6 @@ def patient_dashboard():
 
 # ========================== ВХОД ==========================
 def login_page():
-    # Заголовок с дополнительным отступом (класс login-header)
     st.markdown('<h1 class="login-header">Цифровая история назначений</h1>', unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([1, 1.5, 1])
@@ -684,12 +679,11 @@ def login_page():
         username = st.text_input("Логин", placeholder="врач1 или пациент1")
         password = st.text_input("Пароль", type="password", placeholder="пароль")
         
-        # Радиокнопки вместо selectbox
-        role = st.radio(
+        # Selectbox для роли, стилизованный как поля ввода
+        role = st.selectbox(
             "Роль",
             options=["doctor", "patient"],
-            format_func=lambda x: "Врач" if x == "doctor" else "Пациент",
-            horizontal=True
+            format_func=lambda x: "Врач" if x == "doctor" else "Пациент"
         )
         
         if st.button("Войти", use_container_width=True):
