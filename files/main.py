@@ -338,22 +338,22 @@ def render_breadcrumb(path, page_map):
     path: список названий страниц (например, ["Врач", "Пациенты"])
     page_map: словарь соответствия названия -> страница в session_state
     """
-    # Отображаем текст хлебных крошек
+    # Отображаем текст хлебных крошек для визуального отображения
     breadcrumb_html = '<div class="breadcrumb">'
     for i, item in enumerate(path):
         if i == len(path) - 1:
             breadcrumb_html += f'<span>{item}</span>'
         else:
-            breadcrumb_html += f'<span class="crumb-link" data-page="{page_map.get(item, "doctor_dashboard")}">{item}</span> > '
+            breadcrumb_html += f'<span class="crumb-link">{item}</span> > '
     breadcrumb_html += '</div>'
     st.markdown(breadcrumb_html, unsafe_allow_html=True)
     
-    # Создаём кнопки только если есть больше одного элемента
+    # Создаём кнопки навигации только если элементов больше одного
     if len(path) > 1:
         cols = st.columns(len(path)-1)
         for i, item in enumerate(path[:-1]):
             target_page = page_map.get(item, 'doctor_dashboard')
-            if cols[i].button(item, key=f"crumb_{i}_{target_page}"):
+            if cols[i].button(item, key=f"crumb_{i}_{item}_{target_page}"):
                 st.session_state['page'] = target_page
                 # Сброс временных переменных при возврате на дашборд
                 if target_page == 'doctor_dashboard':
@@ -362,20 +362,6 @@ def render_breadcrumb(path, page_map):
                     if 'edit_patient_id' in st.session_state:
                         del st.session_state['edit_patient_id']
                 st.rerun()
-    
-    # Обработчик кликов через Streamlit (альтернативный способ)
-    cols = st.columns(len(path)-1)
-    for i, item in enumerate(path[:-1]):
-        if cols[i].button(item, key=f"crumb_{i}"):
-            target_page = page_map.get(item, 'doctor_dashboard')
-            st.session_state['page'] = target_page
-            if target_page == 'doctor_dashboard':
-                # Если возврат на дашборд, сбрасываем id пациента для чата/редактирования
-                if 'chat_patient_id' in st.session_state:
-                    del st.session_state['chat_patient_id']
-                if 'edit_patient_id' in st.session_state:
-                    del st.session_state['edit_patient_id']
-            st.rerun()
 
 def render_top_bar(username, role):
     col1, col2 = st.columns([0.85, 0.15])
