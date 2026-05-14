@@ -45,6 +45,29 @@ st.markdown("""
     .stTabs [data-baseweb="tab"] svg {
         display: none;
     }
+    /* НОВОЕ: стили для хедера и футера */
+    .app-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 0;
+        border-bottom: 1px solid #DCE5F0;
+        margin-bottom: 1.5rem;
+    }
+    .app-header .logo {
+        font-size: 1.4rem;
+        font-weight: 600;
+        color: #0A2F6C;
+        font-family: 'Segoe UI', Roboto, system-ui;
+    }
+    .app-footer {
+        margin-top: 2rem;
+        padding: 1rem 0;
+        border-top: 1px solid #DCE5F0;
+        font-size: 0.85rem;
+        color: #6B7280;
+        text-align: left;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -264,6 +287,8 @@ def render_breadcrumb(path):
     st.markdown(breadcrumb_html, unsafe_allow_html=True)
 
 def render_top_bar(username, role):
+    # НОВОЕ: теперь эта функция используется только для правой части (приветствие + выход)
+    # Хедер строится отдельно в каждой странице
     col1, col2 = st.columns([0.85, 0.15])
     with col1:
         st.markdown(f"<div class='user-info'>Добро пожаловать, <strong>{username}</strong> ({role.upper()})</div>", unsafe_allow_html=True)
@@ -293,6 +318,10 @@ def render_chat_panel(patient_id, current_user):
                 add_message(patient_id, st.session_state.get('user_name', 'Врач'), new_msg)
                 st.rerun()
 
+# НОВОЕ: функция рендера футера
+def render_footer():
+    st.markdown('<div class="app-footer">Цифровая история назначений</div>', unsafe_allow_html=True)
+
 # ========================== АНАЛИТИКА ПРЕПАРАТОВ ==========================
 def drug_analytics_dashboard():
     render_breadcrumb(["Врач", "Аналитика", "Препараты"])
@@ -306,8 +335,6 @@ def drug_analytics_dashboard():
         return
     
     df = pd.DataFrame(prescriptions, columns=["Препарат", "Дозировка", "Регулярность", "Дата_начала"])
-    
-    render_top_bar(st.session_state.get('user_name'), st.session_state.get('role'))
     
     # Основные метрики
     st.subheader("Основные показатели")
@@ -464,9 +491,10 @@ def drug_analytics_dashboard():
 
 # ========================== СТРАНИЦА ВРАЧА ==========================
 def doctor_dashboard():
-    st.markdown("# Дашборд врача")
+    # НОВОЕ: хедер с названием продукта и правой панелью пользователя
+    st.markdown('<div class="app-header"><div class="logo">Цифровая история назначений</div></div>', unsafe_allow_html=True)
     render_top_bar(st.session_state.get('user_name'), st.session_state.get('role'))
-    st.divider()
+    # НОВОЕ: убран заголовок "Дашборд врача"
     
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["Пациенты", "Ранее выписанные", "Отсроченное обслуживание", "Наличие ЛП", "Аналитика"])
     
@@ -536,6 +564,9 @@ def doctor_dashboard():
     
     with tab5:
         drug_analytics_dashboard()
+    
+    # НОВОЕ: футер
+    render_footer()
 
 def doctor_edit_patient():
     pid = st.session_state.get('edit_patient_id')
@@ -604,12 +635,13 @@ def doctor_edit_patient():
             st.rerun()
     
     st.markdown('</div>', unsafe_allow_html=True)
+    render_footer()  # НОВОЕ: футер на странице редактирования
 
 # ========================== СТРАНИЦА ПАЦИЕНТА ==========================
 def patient_dashboard():
-    st.markdown("# Мой медицинский кабинет")
+    # НОВОЕ: хедер с названием продукта
+    st.markdown('<div class="app-header"><div class="logo">Цифровая история назначений</div></div>', unsafe_allow_html=True)
     render_top_bar(st.session_state.get('user_name'), st.session_state.get('role'))
-    st.divider()
     
     render_breadcrumb(["Пациент", "Главная"])
     
@@ -641,15 +673,16 @@ def patient_dashboard():
                 st.write(f"**Период:** {p[4]} – {p[5]}")
     
     st.markdown('</div>', unsafe_allow_html=True)
+    render_footer()  # НОВОЕ: футер
 
 # ========================== ВХОД ==========================
 def login_page():
     st.markdown("# Цифровая история назначений")
-    st.markdown("---")
-    
+    # НОВОЕ: убран разделитель "---"
+    # НОВОЕ: убрана карточка (белое поле) вокруг формы входа
+    # Просто центрируем форму без дополнительных обёрток
     col1, col2, col3 = st.columns([1, 1.5, 1])
     with col2:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("Вход в систему")
         
         username = st.text_input("Логин", placeholder="врач1 или пациент1")
@@ -667,7 +700,6 @@ def login_page():
                 st.error("Введите логин и пароль")
         
         st.caption("Тестовые учетные данные: любые логин/пароль")
-        st.markdown('</div>', unsafe_allow_html=True)
 
 # ========================== МАРШРУТИЗАЦИЯ ==========================
 if 'authenticated' not in st.session_state:
