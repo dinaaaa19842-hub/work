@@ -498,7 +498,7 @@ def doctor_dashboard():
         
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            search_name = st.text_input("Поиск по ФИ", placeholder="Иванов")
+            search_name = st.text_input("Поиск по ФИО", placeholder="Иванов")
         with col2:
             birth_filter = st.text_input("Дата рождения (ГГГГ-ММ-ДД)", placeholder="1980-05-15")
         with col3:
