@@ -653,7 +653,7 @@ def patient_prescription_history():
     
     for day in days:
         html_calendar += f'<td class="calendar-day-header">{day}</td>'
-    html_calendar += '</tr><tr>'
+    html_calendar += '<tr><tr>'
     
     day_count = 0
     for week in calendar_data:
@@ -671,9 +671,9 @@ def patient_prescription_history():
             
             day_count += 1
             if day_count % 7 == 0:
-                html_calendar += '</tr><tr>'
+                html_calendar += '<tr></tr>'
     
-    html_calendar += '</tr></table>'
+    html_calendar += '</table>'
     st.markdown(html_calendar, unsafe_allow_html=True)
     
     st.divider()
@@ -1019,86 +1019,84 @@ def polypharmacy_analysis():
     st.markdown('</div>', unsafe_allow_html=True)
     render_footer()
 
-# ========================== СТРАНИЦА ПАЦИЕНТОВ ==========================
+# ========================== СТРАНИЦА ПАЦИЕНТОВ (ИСПРАВЛЕННАЯ) ==========================
 def doctor_patients_page():
-    st.markdown('<div class="card"><div class="card-header">Список пациентов</div>', unsafe_allow_html=True)
-    
-    st.markdown('<div class="search-container">', unsafe_allow_html=True)
-    st.markdown('<h4 style="margin: 0 0 1rem 0;">Поиск по параметрам</h4>', unsafe_allow_html=True)
-    
-    col1, col2, col3, col4, col_search, col_add = st.columns([1.2, 1.2, 1.2, 1.2, 0.8, 1.2])
-    
+    # Единая карточка для всего блока пациентов
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.markdown('<div class="card-header">Список пациентов</div>', unsafe_allow_html=True)
+
+    # ---- Блок поиска (без отдельного фона) ----
+    # Строка с заголовком "Поиск по параметрам" и кнопкой "Добавить" (в правой части)
+    col_title, col_add_btn = st.columns([3, 1])
+    with col_title:
+        st.markdown('<h4 style="margin: 0 0 1rem 0;">Поиск по параметрам</h4>', unsafe_allow_html=True)
+    with col_add_btn:
+        # Кнопка "Добавить" расположена в правой части
+        if st.button("➕ Добавить", use_container_width=True, key="add_patient_btn"):
+            st.session_state['page'] = 'add_patient'
+            st.rerun()
+
+    # Поля фильтрации и кнопка "Поиск"
+    col1, col2, col3, col4, col_search = st.columns([1.2, 1.2, 1.2, 1.2, 1.2])
     with col1:
         st.markdown('<label class="search-label">Поиск по ФИО</label>', unsafe_allow_html=True)
         search_name = st.text_input("", placeholder="ФИО", key="search_fio", label_visibility="collapsed")
-    
     with col2:
         st.markdown('<label class="search-label">Дата рождения</label>', unsafe_allow_html=True)
         birth_filter = st.text_input("", placeholder="ГГГГ-ММ-ДД", key="search_birth", label_visibility="collapsed")
-    
     with col3:
         st.markdown('<label class="search-label">Местоположение</label>', unsafe_allow_html=True)
         location_filter = st.text_input("", placeholder="Город", key="search_location", label_visibility="collapsed")
-    
     with col4:
         st.markdown('<label class="search-label">ID пациента</label>', unsafe_allow_html=True)
         patient_id_filter = st.text_input("", placeholder="№", key="search_id", label_visibility="collapsed")
-    
     with col_search:
         st.markdown('<label class="search-label" style="opacity: 0;">.</label>', unsafe_allow_html=True)
-        search_button = st.button("Поиск", use_container_width=True, key="search_btn")
-    
-    with col_add:
-        st.markdown('<label class="search-label" style="opacity: 0;">.</label>', unsafe_allow_html=True)
-        add_button = st.button("Добавить", use_container_width=True, key="add_btn")
-    
-    if add_button:
-        st.session_state['page'] = 'add_patient'
-        st.rerun()
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-    
+        search_button = st.button("🔍 Поиск", use_container_width=True, key="search_btn")
+
+    st.divider()  # тонкая разделительная линия вместо белого фона
+
+    # ---- Таблица пациентов ----
     if search_button:
         patients = get_all_patients(search_name, birth_filter, location_filter, patient_id_filter)
     else:
         patients = get_all_patients()
-    
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    
+
     if not patients:
         st.info("Пациенты не найдены")
     else:
-        st.divider()
-        
+        # Заголовки столбцов
         cols_header = st.columns([0.5, 1.2, 1.2, 1.2, 1.5, 0.8, 0.8, 0.8])
-        for col, header in zip(cols_header, ["ID", "Фамилия", "Имя", "Дата рожд", "Местоположение", "Препараты", "Чат", "Действия"]):
+        headers = ["ID", "Фамилия", "Имя", "Дата рожд", "Местоположение", "Препараты", "Чат", "Действия"]
+        for col, header in zip(cols_header, headers):
             col.markdown(f"**{header}**")
         st.divider()
-        
+
+        # Вывод строк с пациентами
         for pid, last_name, first_name, birth_date, policy, location in patients:
             _, prescs = get_patient_by_id(pid)
             drugs = ", ".join([p[1] for p in prescs]) if prescs else "Нет"
-            
+            drugs_short = drugs if len(drugs) < 30 else drugs[:27] + "..."
+
             cols = st.columns([0.5, 1.2, 1.2, 1.2, 1.5, 0.8, 0.8, 0.8])
             cols[0].write(str(pid))
             cols[1].write(last_name)
             cols[2].write(first_name)
             cols[3].write(birth_date)
             cols[4].write(location)
-            cols[5].write(drugs if len(drugs) < 30 else drugs[:27] + "...")
-            
-            if cols[6].button("Чат", key=f"chat_{pid}", use_container_width=True):
+            cols[5].write(drugs_short)
+
+            if cols[6].button("💬 Чат", key=f"chat_{pid}", use_container_width=True):
                 st.session_state['chat_patient_id'] = pid
                 st.session_state['page'] = 'doctor_chat'
                 st.rerun()
-            
-            if cols[7].button("Ред.", key=f"edit_{pid}", use_container_width=True):
+
+            if cols[7].button("✏️ Ред.", key=f"edit_{pid}", use_container_width=True):
                 st.session_state['edit_patient_id'] = pid
                 st.session_state['page'] = 'doctor_edit'
                 st.rerun()
-    
-    st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown('</div>', unsafe_allow_html=True)  # закрытие card
 
 # ========================== АНАЛИТИКА ==========================
 def drug_analytics_dashboard():
