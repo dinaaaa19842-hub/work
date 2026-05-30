@@ -655,20 +655,61 @@ def add_patient_page():
         location = st.text_input("Местоположение", placeholder="Москва")
     
     st.divider()
+    st.subheader("Препараты (опционально)")
+    
+    # Инициализация списка препаратов при первом входе
+    if 'new_patient_prescriptions_list' not in st.session_state:
+        st.session_state['new_patient_prescriptions_list'] = []
+    
+    items = st.session_state['new_patient_prescriptions_list']
+    
+    # Отображение существующих препаратов
+    if items:
+        for idx, item in enumerate(items):
+            col1, col2, col3, col4 = st.columns([2.5, 1, 1.5, 0.5])
+            drug = col1.text_input(f"Препарат", value=item[0], key=f"new_drug_{idx}")
+            dose = col2.text_input(f"мг", value=item[1], key=f"new_dose_{idx}")
+            reg = col3.text_input(f"Регулярность", value=item[2], key=f"new_reg_{idx}")
+            if col4.button("Удал.", key=f"del_new_{idx}"):
+                items.pop(idx)
+                st.rerun()
+            items[idx] = [drug, dose, reg]
+    
+    if st.button("+ Добавить препарат", key="add_new_drug"):
+        items.append(["", "", ""])
+        st.rerun()
+    
+    st.divider()
     
     col1, col2 = st.columns([0.5, 0.5])
     with col1:
-        if st.button("Добавить пациента", use_container_width=True):
+        if st.button("✅ Добавить пациента", use_container_width=True, key="submit_new_patient"):
             if last_name and first_name and policy:
                 pid = add_new_patient(last_name, first_name, birth_date.isoformat(), policy, location)
-                st.success(f"Пациент {first_name} {last_name} успешно добавлен!")
+                
+                # Добавляем препараты если они были введены
+                if items:
+                    conn = sqlite3.connect(DB_NAME)
+                    c = conn.cursor()
+                    for drug in items:
+                        if drug[0].strip():  # Только если название препарата не пустое
+                            c.execute("INSERT INTO prescriptions (patient_id, drug_name, dosage, regularity, start_date, end_date) VALUES (?,?,?,?,?,?)",
+                                     (pid, drug[0], drug[1], drug[2], date.today().isoformat(), (date.today() + timedelta(days=30)).isoformat()))
+                    conn.commit()
+                    conn.close()
+                
+                st.success(f"✅ Пациент {first_name} {last_name} успешно добавлен!")
+                if 'new_patient_prescriptions_list' in st.session_state:
+                    del st.session_state['new_patient_prescriptions_list']
                 st.session_state['page'] = 'doctor_dashboard'
                 st.rerun()
             else:
-                st.error("Пожалуйста, заполните все обязательные поля (Фамилия, Имя, Полис)")
+                st.error("❌ Пожалуйста, заполните все обязательные поля (Фамилия, Имя, Полис)")
     
     with col2:
-        if st.button("Отмена", use_container_width=True):
+        if st.button("❌ Отмена", use_container_width=True, key="cancel_new_patient"):
+            if 'new_patient_prescriptions_list' in st.session_state:
+                del st.session_state['new_patient_prescriptions_list']
             st.session_state['page'] = 'doctor_dashboard'
             st.rerun()
     
@@ -816,17 +857,14 @@ def doctor_edit_patient():
 
 # ========================== СТРАНИЦА ПАЦИЕНТОВ (С УЛУЧШЕННЫМ ПОИСКОМ) ==========================
 def doctor_patients_page():
-    st.markdown('<div class="card"><div class="card-header">Список пациентов</div>', unsafe_allow_html=True)
-    
-    # Блок поиска
     st.markdown('<div class="search-container">', unsafe_allow_html=True)
     st.markdown('<h4 style="margin: 0 0 1rem 0;">Поиск по параметрам</h4>', unsafe_allow_html=True)
     
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col_search, col_add = st.columns([1.2, 1.2, 1.2, 1.2, 0.8, 1.2])
     
     with col1:
         st.markdown('<label class="search-label">Поиск по ФИО</label>', unsafe_allow_html=True)
-        search_name = st.text_input("", placeholder="Фамилия или имя", key="search_fio", label_visibility="collapsed")
+        search_name = st.text_input("", placeholder="ФИО", key="search_fio", label_visibility="collapsed")
     
     with col2:
         st.markdown('<label class="search-label">Дата рождения</label>', unsafe_allow_html=True)
@@ -834,16 +872,19 @@ def doctor_patients_page():
     
     with col3:
         st.markdown('<label class="search-label">Местоположение</label>', unsafe_allow_html=True)
-        location_filter = st.text_input("", placeholder="Город, регион", key="search_location", label_visibility="collapsed")
+        location_filter = st.text_input("", placeholder="Город", key="search_location", label_visibility="collapsed")
     
     with col4:
         st.markdown('<label class="search-label">ID пациента</label>', unsafe_allow_html=True)
-        patient_id_filter = st.text_input("", placeholder="Номер", key="search_id", label_visibility="collapsed")
+        patient_id_filter = st.text_input("", placeholder="№", key="search_id", label_visibility="collapsed")
     
-    col1, col2, col3 = st.columns(3)
+    with col_search:
+        st.markdown('<label class="search-label" style="opacity: 0;">.</label>', unsafe_allow_html=True)
+        search_button = st.button("🔍", use_container_width=True, key="search_btn")
     
-    search_button = col1.button("🔍 Поиск", use_container_width=True)
-    add_button = col2.button("➕ Добавить пациента", use_container_width=True)
+    with col_add:
+        st.markdown('<label class="search-label" style="opacity: 0;">.</label>', unsafe_allow_html=True)
+        add_button = st.button("➕ Добавить", use_container_width=True, key="add_btn")
     
     if add_button:
         st.session_state['page'] = 'add_patient'
@@ -857,7 +898,7 @@ def doctor_patients_page():
     else:
         patients = get_all_patients()
     
-    st.divider()
+    st.markdown('<div class="card">', unsafe_allow_html=True)
     
     if not patients:
         st.info("Пациенты не найдены")
@@ -1067,6 +1108,13 @@ def doctor_dashboard():
     # Боковое меню
     with st.sidebar:
         st.markdown("## 📋 Навигация")
+        
+        # Кнопка для контроля состояния боковой панели
+        if st.button("📌 Закрепить меню", key="pin_menu", use_container_width=True):
+            st.session_state['sidebar_pinned'] = not st.session_state.get('sidebar_pinned', True)
+        
+        st.divider()
+        
         for tab in ["Пациенты", "Отсроченное обслуживание", "Наличие ЛП", "Аналитика"]:
             if st.button(tab, key=f"sidebar_{tab}", use_container_width=True):
                 st.session_state.doctor_selected_tab = tab
