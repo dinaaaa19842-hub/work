@@ -6,12 +6,13 @@ import plotly.express as px
 from datetime import datetime, date, timedelta
 import hashlib
 import qrcode
+import calendar
 from io import BytesIO
 import base64
 import random
 
 # ========================== НАСТРОЙКА СТРАНИЦЫ ==========================
-st.set_page_config(page_title="Цифровая история назначений", page_icon="", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Цифровая история назначений", page_icon="💊", layout="wide", initial_sidebar_state="expanded")
 
 # ========================== CSS (МЕДИЦИНСКИЙ ТЁМНО-СИНИЙ СТИЛЬ) ==========================
 st.markdown("""
@@ -21,10 +22,27 @@ st.markdown("""
         color: #1F2A3E !important; background-color: transparent !important;
     }
     h1, h2, h3, h4, h5, h6 { color: #0A2F6C !important; font-weight: 600; }
+    
     .card { background-color: #FFFFFF; border-radius: 8px; padding: 1.5rem; margin-bottom: 1.5rem; 
             box-shadow: 0 1px 2px rgba(0,0,0,0.05); border: 1px solid #DCE5F0; }
     .card-header { font-size: 1.3rem; font-weight: 700; color: #0A2F6C; margin-bottom: 1.5rem; 
                    padding-bottom: 0.8rem; border-bottom: 2px solid #0A2F6C; }
+    
+    .search-container {
+        background-color: #FFFFFF;
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        border: 1px solid #DCE5F0;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+    
+    .search-label {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #0A2F6C;
+        margin-bottom: 0.3rem;
+    }
     
     .stTextInput input, .stNumberInput input, .stDateInput input, .stTextArea textarea {
         background-color: #FFFFFF !important;
@@ -36,9 +54,17 @@ st.markdown("""
     .stButton button { background-color: #0A2F6C !important; color: #FFFFFF !important; border-radius: 4px !important; 
                        border: none !important; font-weight: 500 !important; padding: 0.5rem 1rem !important; }
     .stButton button:hover { background-color: #1E3A8A !important; }
+    
+    .btn-add { background-color: #28A745 !important; }
+    .btn-add:hover { background-color: #218838 !important; }
+    
+    .btn-history { background-color: #17A2B8 !important; }
+    .btn-history:hover { background-color: #138496 !important; }
+    
     table { width: 100%; border-collapse: collapse; }
     th { background-color: #E6EDF6; color: #0A2F6C; padding: 0.8rem; text-align: left; font-weight: 600; border-bottom: 2px solid #0A2F6C; }
     td { padding: 0.8rem; border-bottom: 1px solid #DCE5F0; color: #1F2A3E; }
+    
     .stTabs [data-baseweb="tab-list"] { background-color: #FFFFFF; border-bottom: 1px solid #DCE5F0; }
     .stTabs [data-baseweb="tab"] { color: #4B5563; font-weight: 500; }
     .stTabs [aria-selected="true"] { color: #0A2F6C !important; border-bottom-color: #0A2F6C !important; }
@@ -75,10 +101,7 @@ st.markdown("""
         color: #6B7280;
         text-align: left;
     }
-    .login-header {
-        margin-bottom: 6rem !important;
-    }
-    /* Стили для чата */
+    
     .chat-message-user {
         text-align: right;
         margin-bottom: 1rem;
@@ -109,7 +132,6 @@ st.markdown("""
         margin-top: 0.25rem;
     }
     
-    /* Стили для бокового меню (бургер) */
     [data-testid="stSidebar"] {
         background-color: #0A2F6C;
     }
@@ -129,11 +151,64 @@ st.markdown("""
     [data-testid="stSidebar"] h2, [data-testid="stSidebar"] .stMarkdown h2 {
         color: #FFFFFF !important;
     }
-    /* Контейнер для прижатия кнопки выхода вниз */
-    .sidebar-content {
+    
+    .calendar-container {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 8px;
+        margin: 20px 0;
+    }
+    
+    .calendar-day {
+        aspect-ratio: 1;
         display: flex;
-        flex-direction: column;
-        height: 100%;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        background-color: #f9f9f9;
+        transition: background-color 0.2s;
+    }
+    
+    .calendar-day:hover {
+        background-color: #e9e9e9;
+    }
+    
+    .calendar-day-active {
+        background-color: #0A2F6C;
+        color: white;
+        font-weight: bold;
+        border-color: #0A2F6C;
+    }
+    
+    .calendar-day-empty {
+        background-color: transparent;
+        border: none;
+        cursor: default;
+    }
+    
+    .calendar-day-empty:hover {
+        background-color: transparent;
+    }
+    
+    .history-item {
+        background-color: #F0F4FA;
+        border-left: 4px solid #0A2F6C;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        border-radius: 4px;
+    }
+    
+    .history-item-active {
+        background-color: #D4EDDA;
+        border-left-color: #28A745;
+    }
+    
+    .history-item-expired {
+        background-color: #F8D7DA;
+        border-left-color: #DC3545;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -145,11 +220,13 @@ def init_db():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     
+    # Удаляем старые таблицы если существуют
     c.execute("DROP TABLE IF EXISTS patients")
     c.execute("DROP TABLE IF EXISTS prescriptions")
     c.execute("DROP TABLE IF EXISTS messages")
     c.execute("DROP TABLE IF EXISTS intake_log")
     
+    # Создаем новые таблицы
     c.execute('''CREATE TABLE patients
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
                   last_name TEXT, first_name TEXT,
@@ -182,11 +259,11 @@ def init_db():
     
     conn.commit()
     
-    # Тестовые пациенты и сообщения
+    # Тестовые данные
     first_names_m = ["Иван", "Петр", "Сергей", "Александр", "Виктор", "Дмитрий", "Павел", "Андрей", "Владимир", "Николай", "Алексей", "Константин", "Валентин", "Игорь", "Анатолий", "Евгений", "Борис", "Вячеслав", "Валерий", "Юрий"]
     first_names_f = ["Анна", "Мария", "Елена", "Ольга", "Юлия", "Наталья", "Татьяна", "Галина", "Валентина", "Светлана", "Людмила", "Нина", "Раиса", "Вера", "Зинаида", "Маргарита", "Александра", "Ирина", "Виктория", "Екатерина"]
     
-    last_names = ["Иванов", "Петров", "Сидоров", "Кузнецов", "Смирнов", "Волков", "Морозов", "Орлов", "Павлов", "Федоров", "Степанов", "Александров", "Никитин", "Соколов", "Васильев", "Новиков", "Фомин", "Герасимов", "Лавров", "Панов", "Козлов", "Лобанов", "Раков", "Леонов", "Климов", "Миронов", "Эмелин", "Власов", "Гордеев", "Давыдов", "Егоров", "Ефимов", "Желтов", "Журавлев", "Ильин", "Казаков", "Калинин", "Карпов", "Кольцов", "Лебедев"]
+    last_names = ["Иванов", "Петров", "Сидоров", "Кузнецов", "Смирнов", "Волков", "Морозов", "Орлов", "Павлов", "Федоров", "Степанов", "Александров", "Никитин", "Соколов", "Васильев", "Новиков", "Фомин", "Герасимов", "Лавров", "Панов", "Козлов", "Лобанов", "Раков", "Леонов", "Климов", "Миронов", "Эмелин", "Власов", "Гордеев", "Давыдов"]
     
     locations = ["Москва", "Санкт-Петербург", "Казань", "Екатеринбург", "Новосибирск", "Пермь", "Челябинск", "Краснодар", "Самара", "Ростов-на-Дону"]
     
@@ -201,7 +278,6 @@ def init_db():
         ("Ибупрофен", "200 мг"), ("Парацетамол", "500 мг"), ("Аспирин", "500 мг"),
     ]
     
-    # Добавляем пациентов
     for i in range(50):
         gender = random.choice(["M", "F"])
         first_name = random.choice(first_names_m if gender == "M" else first_names_f)
@@ -231,8 +307,17 @@ def init_db():
                        (patient_id, drug_name, dosage, regularity, start_date, end_date)
                        VALUES (?,?,?,?,?,?)''',
                      (pid, drug_name, dosage, regularity, start_date, end_date))
+            
+            presc_id = c.lastrowid
+            
+            # Добавляем записи о приеме препаратов в последний год
+            for day_offset in range(365):
+                if random.random() < 0.7:  # 70% вероятность приема в день
+                    intake_date = (datetime.now() - timedelta(days=day_offset)).strftime("%Y-%m-%d")
+                    c.execute("INSERT INTO intake_log (prescription_id, intake_date) VALUES (?,?)",
+                             (presc_id, intake_date))
         
-        # Добавляем тестовое сообщение от пациента для первых 10 пациентов
+        # Добавляем тестовые сообщения для первых 10 пациентов
         if i < 10:
             test_messages = [
                 "Добрый день! Подскажите, как правильно принимать Энап?",
@@ -253,7 +338,10 @@ def init_db():
     conn.commit()
     conn.close()
 
-init_db()
+# Инициализация БД только если это первый запуск
+if 'db_initialized' not in st.session_state:
+    init_db()
+    st.session_state['db_initialized'] = True
 
 # ========================== ФУНКЦИИ БД ==========================
 def get_all_patients(search_query="", birth_date_filter="", location_filter="", patient_id_filter=""):
@@ -300,6 +388,52 @@ def get_patient_by_id(pid):
     conn.close()
     return None, []
 
+def get_prescription_history(patient_id):
+    """Получить историю всех когда-либо выписанных препаратов для пациента"""
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    
+    c.execute("""SELECT DISTINCT p.id, p.drug_name, p.dosage, p.regularity, p.start_date, p.end_date 
+                 FROM prescriptions p 
+                 WHERE p.patient_id=? 
+                 ORDER BY p.start_date DESC""", (patient_id,))
+    prescs = c.fetchall()
+    conn.close()
+    return prescs
+
+def get_intake_dates_for_prescription(prescription_id):
+    """Получить все даты приема для конкретного назначения"""
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    
+    c.execute("SELECT intake_date FROM intake_log WHERE prescription_id=? ORDER BY intake_date DESC", (prescription_id,))
+    dates = [row[0] for row in c.fetchall()]
+    conn.close()
+    return dates
+
+def get_intakes_for_date(prescription_id, intake_date):
+    """Получить информацию о приеме на конкретную дату"""
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    
+    c.execute("""SELECT p.id, p.drug_name, p.dosage, p.regularity, il.intake_date
+                 FROM prescriptions p
+                 LEFT JOIN intake_log il ON p.id = il.prescription_id
+                 WHERE p.id=? AND il.intake_date=?""", (prescription_id, intake_date))
+    result = c.fetchone()
+    conn.close()
+    return result
+
+def add_new_patient(last_name, first_name, birth_date, policy, location):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("INSERT INTO patients (last_name, first_name, birth_date, policy, location, created_at) VALUES (?,?,?,?,?,?)",
+             (last_name, first_name, birth_date, policy, location, datetime.now().isoformat()))
+    pid = c.lastrowid
+    conn.commit()
+    conn.close()
+    return pid
+
 def save_patient(pid, last_name, first_name, birth_date, policy, location, prescriptions_list):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
@@ -315,16 +449,6 @@ def save_patient(pid, last_name, first_name, birth_date, policy, location, presc
     
     conn.commit()
     conn.close()
-
-def add_new_patient(last_name, first_name, birth_date, policy, location):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute("INSERT INTO patients (last_name, first_name, birth_date, policy, location, created_at) VALUES (?,?,?,?,?,?)",
-             (last_name, first_name, birth_date, policy, location, datetime.now().isoformat()))
-    pid = c.lastrowid
-    conn.commit()
-    conn.close()
-    return pid
 
 def add_message(patient_id, sender, message):
     conn = sqlite3.connect(DB_NAME)
@@ -342,14 +466,6 @@ def get_messages(patient_id):
     conn.close()
     return messages
 
-def get_prescribed_count(patient_id):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute("SELECT COUNT(*) FROM prescriptions WHERE patient_id=?", (patient_id,))
-    count = c.fetchone()[0]
-    conn.close()
-    return count
-
 def get_all_prescriptions():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
@@ -360,11 +476,7 @@ def get_all_prescriptions():
 
 # ========================== КОМПОНЕНТЫ UI ==========================
 def render_breadcrumb(path, page_map):
-    """
-    Отображает кликабельные хлебные крошки.
-    path: список названий страниц (например, ["Врач", "Пациенты"])
-    page_map: словарь соответствия названия -> страница в session_state
-    """
+    """Отображает кликабельные хлебные крошки (без кнопки Врач на странице пациентов)"""
     breadcrumb_html = '<div class="breadcrumb">'
     for i, item in enumerate(path):
         if i == len(path) - 1:
@@ -373,28 +485,196 @@ def render_breadcrumb(path, page_map):
             breadcrumb_html += f'<span class="crumb-link">{item}</span> > '
     breadcrumb_html += '</div>'
     st.markdown(breadcrumb_html, unsafe_allow_html=True)
-    
-    if len(path) > 1:
-        cols = st.columns(len(path)-1)
-        for i, item in enumerate(path[:-1]):
-            target_page = page_map.get(item, 'doctor_dashboard')
-            if cols[i].button(item, key=f"crumb_{i}_{item}_{target_page}"):
-                st.session_state['page'] = target_page
-                if target_page == 'doctor_dashboard':
-                    if 'chat_patient_id' in st.session_state:
-                        del st.session_state['chat_patient_id']
-                    if 'edit_patient_id' in st.session_state:
-                        del st.session_state['edit_patient_id']
-                st.rerun()
 
 def render_top_bar(username, role):
-    # Отображаем только приветствие, кнопка выхода перенесена в sidebar
     st.markdown(f"<div class='user-info'>Добро пожаловать, <strong>{username}</strong> ({role.upper()})</div>", unsafe_allow_html=True)
 
 def render_footer():
-    st.markdown('<div class="app-footer">Цифровая история назначений</div>', unsafe_allow_html=True)
+    st.markdown('<div class="app-footer">Цифровая история назначений | v2.0</div>', unsafe_allow_html=True)
 
-# ========================== ЧАТ (ОТДЕЛЬНАЯ СТРАНИЦА) ==========================
+# ========================== СТРАНИЦА ИСТОРИИ ПРЕПАРАТОВ ==========================
+def patient_prescription_history():
+    pid = st.session_state.get('history_patient_id')
+    if not pid:
+        st.session_state['page'] = 'doctor_edit'
+        st.rerun()
+    
+    patient, _ = get_patient_by_id(pid)
+    full_name = f"{patient[1]} {patient[2]}"
+    
+    render_breadcrumb([f"История препаратов: {full_name}"], {})
+    
+    st.markdown(f'<div class="card"><div class="card-header">История препаратов пациента: {full_name}</div>', unsafe_allow_html=True)
+    
+    all_prescriptions = get_prescription_history(pid)
+    
+    if not all_prescriptions:
+        st.info("История препаратов отсутствует")
+        if st.button("← Вернуться к редактированию"):
+            st.session_state['page'] = 'doctor_edit'
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+        return
+    
+    # Выбор препарата
+    st.subheader("Выберите препарат для просмотра истории приема")
+    
+    selected_drug_idx = st.selectbox(
+        "Препараты:",
+        range(len(all_prescriptions)),
+        format_func=lambda i: f"{all_prescriptions[i][1]} ({all_prescriptions[i][2]}) - {all_prescriptions[i][4]} по {all_prescriptions[i][5]}"
+    )
+    
+    selected_prescription = all_prescriptions[selected_drug_idx]
+    presc_id, drug_name, dosage, regularity, start_date, end_date = selected_prescription
+    
+    # Информация о препарате
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Название", drug_name)
+    with col2:
+        st.metric("Дозировка", dosage)
+    with col3:
+        st.metric("Частота", regularity)
+    with col4:
+        is_active = datetime.strptime(end_date, "%Y-%m-%d").date() >= date.today()
+        st.metric("Статус", "🟢 Активен" if is_active else "🔴 Завершен")
+    
+    st.divider()
+    
+    # Календарь последнего года
+    st.subheader("Календарь приема препарата (последний год)")
+    
+    # Получаем даты приема
+    intake_dates = get_intake_dates_for_prescription(presc_id)
+    intake_dates_set = set(intake_dates)
+    
+    # Выбор месяца и года
+    col1, col2 = st.columns(2)
+    with col1:
+        selected_month = st.selectbox("Месяц:", range(1, 13), format_func=lambda x: calendar.month_name[x])
+    with col2:
+        selected_year = st.selectbox("Год:", range(date.today().year - 1, date.today().year + 1))
+    
+    # Отображение календаря
+    st.markdown("### Календарь приема")
+    
+    # Получаем информацию о дне недели и количество дней в месяце
+    cal = calendar.monthcalendar(selected_year, selected_month)
+    
+    # Дни недели
+    days_of_week = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+    
+    col_days = st.columns(7)
+    for i, day in enumerate(days_of_week):
+        col_days[i].write(f"**{day}**")
+    
+    # Календарь
+    cols = st.columns(7)
+    for week in cal:
+        for day_idx, day in enumerate(week):
+            with cols[day_idx]:
+                if day == 0:
+                    st.write("")
+                else:
+                    date_str = f"{selected_year:04d}-{selected_month:02d}-{day:02d}"
+                    is_taken = date_str in intake_dates_set
+                    
+                    if is_taken:
+                        st.markdown(f"""
+                        <div style='background-color: #0A2F6C; color: white; padding: 8px; 
+                                    border-radius: 4px; text-align: center; cursor: pointer; 
+                                    font-weight: bold;'>{day}</div>
+                        """, unsafe_allow_html=True)
+                        
+                        if st.button(f"Подробно", key=f"intake_{date_str}"):
+                            st.session_state['selected_intake_date'] = date_str
+                    else:
+                        st.markdown(f"""
+                        <div style='background-color: #F0F4FA; padding: 8px; 
+                                    border-radius: 4px; text-align: center;'>{day}</div>
+                        """, unsafe_allow_html=True)
+    
+    # Если выбран день, показываем подробности
+    if 'selected_intake_date' in st.session_state:
+        intake_date = st.session_state['selected_intake_date']
+        st.divider()
+        st.subheader(f"Прием препарата на {intake_date}")
+        
+        intake_info = get_intakes_for_date(presc_id, intake_date)
+        if intake_info:
+            st.info(f"""
+            **Препарат:** {intake_info[1]}  
+            **Дозировка:** {intake_info[2]}  
+            **Частота:** {intake_info[3]}  
+            **Дата приема:** {intake_info[4]}
+            """)
+    
+    st.divider()
+    
+    # История приемов в виде таблицы
+    st.subheader("История приемов (последние 30 дней)")
+    
+    recent_intakes = [d for d in intake_dates[:30]]
+    
+    if recent_intakes:
+        intake_df = pd.DataFrame({
+            'Дата приема': recent_intakes,
+            'Препарат': [drug_name] * len(recent_intakes),
+            'Дозировка': [dosage] * len(recent_intakes),
+            'Статус': ['✓ Принято'] * len(recent_intakes)
+        })
+        st.dataframe(intake_df, use_container_width=True)
+    else:
+        st.info("Нет записей о приеме препарата в последние 30 дней")
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    if st.button("← Вернуться к редактированию"):
+        st.session_state['page'] = 'doctor_edit'
+        st.rerun()
+
+# ========================== СТРАНИЦА ДОБАВЛЕНИЯ ПАЦИЕНТА ==========================
+def add_patient_page():
+    render_breadcrumb(["Добавить пациента"], {})
+    
+    st.markdown('<div class="card"><div class="card-header">Добавить нового пациента</div>', unsafe_allow_html=True)
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        last_name = st.text_input("Фамилия", placeholder="Иванов")
+    with col2:
+        first_name = st.text_input("Имя", placeholder="Иван")
+    
+    birth_date = st.date_input("Дата рождения")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        policy = st.text_input("Номер полиса", placeholder="1234567890")
+    with col2:
+        location = st.text_input("Местоположение", placeholder="Москва")
+    
+    st.divider()
+    
+    col1, col2 = st.columns([0.5, 0.5])
+    with col1:
+        if st.button("Добавить пациента", use_container_width=True):
+            if last_name and first_name and policy:
+                pid = add_new_patient(last_name, first_name, birth_date.isoformat(), policy, location)
+                st.success(f"Пациент {first_name} {last_name} успешно добавлен!")
+                st.session_state['page'] = 'doctor_dashboard'
+                st.rerun()
+            else:
+                st.error("Пожалуйста, заполните все обязательные поля (Фамилия, Имя, Полис)")
+    
+    with col2:
+        if st.button("Отмена", use_container_width=True):
+            st.session_state['page'] = 'doctor_dashboard'
+            st.rerun()
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# ========================== ЧАТ ==========================
 def doctor_chat_page():
     pid = st.session_state.get('chat_patient_id')
     if not pid:
@@ -404,8 +684,7 @@ def doctor_chat_page():
     patient, _ = get_patient_by_id(pid)
     full_name = f"{patient[1]} {patient[2]}"
     
-    path_map = {"Врач": "doctor_dashboard", "Пациенты": "doctor_dashboard", "Чат": "doctor_chat"}
-    render_breadcrumb(["Врач", "Пациенты", "Чат"], path_map)
+    render_breadcrumb([f"Чат с {full_name}"], {})
     
     st.markdown(f'<div class="card"><div class="card-header">Чат с пациентом {full_name}</div>', unsafe_allow_html=True)
     
@@ -448,10 +727,177 @@ def doctor_chat_page():
     st.markdown('</div>', unsafe_allow_html=True)
     render_footer()
 
+# ========================== РЕДАКТИРОВАНИЕ ПАЦИЕНТА ==========================
+def doctor_edit_patient():
+    pid = st.session_state.get('edit_patient_id')
+    if not pid:
+        st.session_state['page'] = 'doctor_dashboard'
+        st.rerun()
+    
+    patient, prescs = get_patient_by_id(pid)
+    render_breadcrumb([f"Редактирование: {patient[1]} {patient[2]}"], {})
+    
+    st.markdown(f'<div class="card"><div class="card-header">Редактирование: {patient[1]} {patient[2]}</div>', unsafe_allow_html=True)
+    render_top_bar(st.session_state.get('user_name'), st.session_state.get('role'))
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        new_last = st.text_input("Фамилия", value=patient[1])
+    with col2:
+        new_first = st.text_input("Имя", value=patient[2])
+    
+    new_birth = st.date_input("Дата рождения", value=datetime.strptime(patient[3], "%Y-%m-%d").date())
+    new_location = st.text_input("Местоположение", value=patient[5] or "")
+    new_policy = st.text_input("Полис", value=patient[4] or "")
+    
+    st.divider()
+    st.subheader("Текущие назначения")
+    
+    if 'edit_prescriptions_list' not in st.session_state or st.session_state.get('edit_patient_id_prev') != pid:
+        st.session_state['edit_prescriptions_list'] = [[p[1], p[2], p[3]] for p in prescs]
+        st.session_state['edit_patient_id_prev'] = pid
+    
+    items = st.session_state['edit_prescriptions_list']
+    
+    for idx, item in enumerate(items):
+        col1, col2, col3, col4 = st.columns([2.5, 1, 1.5, 0.5])
+        drug = col1.text_input(f"Препарат", value=item[0], key=f"drug_edit_{idx}")
+        dose = col2.text_input(f"мг", value=item[1], key=f"dose_edit_{idx}")
+        reg = col3.text_input(f"Регулярность", value=item[2], key=f"reg_edit_{idx}")
+        if col4.button("Удал.", key=f"del_edit_{idx}"):
+            items.pop(idx)
+            st.rerun()
+        items[idx] = [drug, dose, reg]
+    
+    if st.button("+ Добавить препарат"):
+        items.append(["", "", ""])
+        st.rerun()
+    
+    st.divider()
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if st.button("📋 История препаратов", use_container_width=True):
+            st.session_state['history_patient_id'] = pid
+            st.session_state['page'] = 'prescription_history'
+            st.rerun()
+    
+    with col2:
+        if st.button("💬 Чат", use_container_width=True):
+            st.session_state['chat_patient_id'] = pid
+            st.session_state['page'] = 'doctor_chat'
+            st.rerun()
+    
+    with col3:
+        if st.button("🔍 Аналитика", use_container_width=True):
+            st.session_state['page'] = 'doctor_dashboard'
+            st.rerun()
+    
+    st.divider()
+    
+    col1, col2 = st.columns([0.5, 0.5])
+    with col1:
+        if st.button("Сохранить", use_container_width=True):
+            valid = [(d[0], d[1], d[2]) for d in items if d[0].strip()]
+            save_patient(pid, new_last, new_first, new_birth.isoformat(), new_policy, new_location, valid)
+            st.success("Изменения сохранены")
+            if 'edit_prescriptions_list' in st.session_state:
+                del st.session_state['edit_prescriptions_list']
+            st.session_state['page'] = 'doctor_dashboard'
+            st.rerun()
+    
+    with col2:
+        if st.button("Отмена", use_container_width=True):
+            st.session_state['page'] = 'doctor_dashboard'
+            st.rerun()
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    render_footer()
+
+# ========================== СТРАНИЦА ПАЦИЕНТОВ (С УЛУЧШЕННЫМ ПОИСКОМ) ==========================
+def doctor_patients_page():
+    st.markdown('<div class="card"><div class="card-header">Список пациентов</div>', unsafe_allow_html=True)
+    
+    # Блок поиска
+    st.markdown('<div class="search-container">', unsafe_allow_html=True)
+    st.markdown('<h4 style="margin: 0 0 1rem 0;">Поиск по параметрам</h4>', unsafe_allow_html=True)
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.markdown('<label class="search-label">Поиск по ФИО</label>', unsafe_allow_html=True)
+        search_name = st.text_input("", placeholder="Фамилия или имя", key="search_fio", label_visibility="collapsed")
+    
+    with col2:
+        st.markdown('<label class="search-label">Дата рождения</label>', unsafe_allow_html=True)
+        birth_filter = st.text_input("", placeholder="ГГГГ-ММ-ДД", key="search_birth", label_visibility="collapsed")
+    
+    with col3:
+        st.markdown('<label class="search-label">Местоположение</label>', unsafe_allow_html=True)
+        location_filter = st.text_input("", placeholder="Город, регион", key="search_location", label_visibility="collapsed")
+    
+    with col4:
+        st.markdown('<label class="search-label">ID пациента</label>', unsafe_allow_html=True)
+        patient_id_filter = st.text_input("", placeholder="Номер", key="search_id", label_visibility="collapsed")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    search_button = col1.button("🔍 Поиск", use_container_width=True)
+    add_button = col2.button("➕ Добавить пациента", use_container_width=True)
+    
+    if add_button:
+        st.session_state['page'] = 'add_patient'
+        st.rerun()
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Выполнение поиска
+    if search_button:
+        patients = get_all_patients(search_name, birth_filter, location_filter, patient_id_filter)
+    else:
+        patients = get_all_patients()
+    
+    st.divider()
+    
+    if not patients:
+        st.info("Пациенты не найдены")
+    else:
+        st.markdown(f"**Найдено пациентов: {len(patients)}**")
+        st.divider()
+        
+        # Отображение таблицы
+        cols_header = st.columns([0.5, 1.2, 1.2, 1.2, 1.5, 0.8, 0.8, 0.8])
+        for col, header in zip(cols_header, ["ID", "Фамилия", "Имя", "Дата рожд", "Местоположение", "Препараты", "Чат", "Действия"]):
+            col.markdown(f"**{header}**")
+        st.divider()
+        
+        for pid, last_name, first_name, birth_date, policy, location in patients:
+            _, prescs = get_patient_by_id(pid)
+            drugs = ", ".join([p[1] for p in prescs]) if prescs else "Нет"
+            
+            cols = st.columns([0.5, 1.2, 1.2, 1.2, 1.5, 0.8, 0.8, 0.8])
+            cols[0].write(str(pid))
+            cols[1].write(last_name)
+            cols[2].write(first_name)
+            cols[3].write(birth_date)
+            cols[4].write(location)
+            cols[5].write(drugs if len(drugs) < 30 else drugs[:27] + "...")
+            
+            if cols[6].button("💬", key=f"chat_{pid}", help="Чат с пациентом"):
+                st.session_state['chat_patient_id'] = pid
+                st.session_state['page'] = 'doctor_chat'
+                st.rerun()
+            
+            if cols[7].button("✏️", key=f"edit_{pid}", help="Редактировать"):
+                st.session_state['edit_patient_id'] = pid
+                st.session_state['page'] = 'doctor_edit'
+                st.rerun()
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+
 # ========================== АНАЛИТИКА ПРЕПАРАТОВ ==========================
 def drug_analytics_dashboard():
-    path_map = {"Врач": "doctor_dashboard", "Аналитика": "doctor_dashboard", "Препараты": "doctor_dashboard"}
-    render_breadcrumb(["Врач", "Аналитика", "Препараты"], path_map)
+    render_breadcrumb(["Аналитика"], {})
     
     st.markdown('<div class="card"><div class="card-header">Аналитика лекарственных препаратов</div>', unsafe_allow_html=True)
     
@@ -567,7 +1013,6 @@ def drug_analytics_dashboard():
     
     with tab5:
         st.subheader("Статистический анализ")
-        
         col1, col2 = st.columns(2)
         
         with col1:
@@ -580,8 +1025,8 @@ def drug_analytics_dashboard():
             st.markdown("**Распределение начальных дат назначений:**")
             df["Месяц"] = pd.to_datetime(df["Дата_начала"]).dt.to_period("M")
             monthly_counts = df.groupby("Месяц").size()
-            st.write(f"- Начало диапазона: {df['Дата_начала'].min()}")
-            st.write(f"- Конец диапазона: {df['Дата_начала'].max()}")
+            st.write(f"- Начало: {df['Дата_начала'].min()}")
+            st.write(f"- Конец: {df['Дата_начала'].max()}")
             st.write(f"- Среднее по месяцам: {len(df) / len(monthly_counts):.0f} назначений")
         
         st.divider()
@@ -611,9 +1056,9 @@ def drug_analytics_dashboard():
     
     st.markdown('</div>', unsafe_allow_html=True)
 
-# ========================== СТРАНИЦА ВРАЧА (С БОКОВЫМ МЕНЮ И ВЫХОДОМ ВНИЗУ) ==========================
+# ========================== СТРАНИЦА ВРАЧА ==========================
 def doctor_dashboard():
-    st.markdown('<div class="app-header"><div class="logo">Цифровая история назначений</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="app-header"><div class="logo">💊 Цифровая история назначений</div></div>', unsafe_allow_html=True)
     render_top_bar(st.session_state.get('user_name'), st.session_state.get('role'))
 
     if 'doctor_selected_tab' not in st.session_state:
@@ -621,171 +1066,44 @@ def doctor_dashboard():
 
     # Боковое меню
     with st.sidebar:
-        st.markdown("## Навигация")
-        for tab in ["Пациенты", "Ранее выписанные", "Отсроченное обслуживание", "Наличие ЛП", "Аналитика"]:
+        st.markdown("## 📋 Навигация")
+        for tab in ["Пациенты", "Отсроченное обслуживание", "Наличие ЛП", "Аналитика"]:
             if st.button(tab, key=f"sidebar_{tab}", use_container_width=True):
                 st.session_state.doctor_selected_tab = tab
                 st.rerun()
         st.markdown("---")
-        # Добавляем пустое пространство, чтобы кнопка выхода была внизу
         st.markdown("<div style='flex-grow: 1;'></div>", unsafe_allow_html=True)
-        # Кнопка выхода
-        if st.button("ВЫХОД", key="logout_btn", use_container_width=True):
+        if st.button("🚪 ВЫХОД", key="logout_btn", use_container_width=True):
             st.session_state['authenticated'] = False
             st.session_state.clear()
             st.rerun()
 
     selected_tab = st.session_state.doctor_selected_tab
-    path_map = {"Врач": "doctor_dashboard"}
-    render_breadcrumb(["Врач", selected_tab], path_map)
+    render_breadcrumb([selected_tab], {})
 
-    # Отображение выбранного раздела
     if selected_tab == "Пациенты":
-        st.markdown('<div class="card"><div class="card-header">Список пациентов</div>', unsafe_allow_html=True)
-        
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            search_name = st.text_input("Поиск по ФИО", placeholder="Иванов")
-        with col2:
-            birth_filter = st.text_input("Дата рождения (ГГГГ-ММ-ДД)", placeholder="1980-05-15")
-        with col3:
-            location_filter = st.text_input("Местоположение", placeholder="Москва")
-        with col4:
-            patient_id_filter = st.text_input("ID пациента", placeholder="1")
-        
-        patients = get_all_patients(search_name, birth_filter, location_filter, patient_id_filter)
-        
-        if not patients:
-            st.info("Пациенты не найдены")
-        else:
-            cols_header = st.columns([0.5, 1, 1, 1.2, 2, 0.8, 0.8, 0.8])
-            for col, header in zip(cols_header, ["ID", "Фамилия", "Имя", "Дата рожд", "Местоположение", "Препараты", "Чат", "Действия"]):
-                col.markdown(f"**{header}**")
-            st.divider()
-            
-            for pid, last_name, first_name, birth_date, policy, location in patients:
-                _, prescs = get_patient_by_id(pid)
-                drugs = ", ".join([p[1] for p in prescs]) if prescs else "Нет"
-                
-                cols = st.columns([0.5, 1, 1, 1.2, 2, 0.8, 0.8, 0.8])
-                cols[0].write(str(pid))
-                cols[1].write(last_name)
-                cols[2].write(first_name)
-                cols[3].write(birth_date)
-                cols[4].write(location)
-                cols[5].write(drugs if len(drugs) < 30 else drugs[:27] + "...")
-                
-                if cols[6].button("💬", key=f"chat_{pid}", help="Чат с пациентом"):
-                    st.session_state['chat_patient_id'] = pid
-                    st.session_state['page'] = 'doctor_chat'
-                    st.rerun()
-                
-                if cols[7].button("Ред.", key=f"edit_{pid}"):
-                    st.session_state['edit_patient_id'] = pid
-                    st.session_state['page'] = 'doctor_edit'
-                    st.rerun()
-        
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    elif selected_tab == "Ранее выписанные":
-        st.markdown('<div class="card"><div class="card-header">История рецептов</div>', unsafe_allow_html=True)
-        st.info("Здесь отображаются ранее выписанные рецепты")
-        st.markdown('</div>', unsafe_allow_html=True)
-    
+        doctor_patients_page()
     elif selected_tab == "Отсроченное обслуживание":
         st.markdown('<div class="card"><div class="card-header">Рецепты на отсроченном обслуживании</div>', unsafe_allow_html=True)
         st.info("Рецепты, которые пациент может получить позже")
         st.markdown('</div>', unsafe_allow_html=True)
-    
     elif selected_tab == "Наличие ЛП":
         st.markdown('<div class="card"><div class="card-header">Проверка наличия в аптеках</div>', unsafe_allow_html=True)
         drug_name = st.text_input("Введите название препарата")
         if drug_name:
             st.info(f"Поиск наличия препарата: {drug_name}")
         st.markdown('</div>', unsafe_allow_html=True)
-    
     elif selected_tab == "Аналитика":
         drug_analytics_dashboard()
 
     render_footer()
 
-# ========================== РЕДАКТИРОВАНИЕ ПАЦИЕНТА ==========================
-def doctor_edit_patient():
-    pid = st.session_state.get('edit_patient_id')
-    if not pid:
-        st.session_state['page'] = 'doctor_dashboard'
-        st.rerun()
-    
-    patient, prescs = get_patient_by_id(pid)
-    path_map = {"Врач": "doctor_dashboard", "Пациенты": "doctor_dashboard", "Редактирование": "doctor_edit"}
-    render_breadcrumb(["Врач", "Пациенты", f"Редактирование: {patient[1]} {patient[2]}"], path_map)
-    
-    st.markdown(f'<div class="card"><div class="card-header">Редактирование: {patient[1]} {patient[2]}</div>', unsafe_allow_html=True)
-    render_top_bar(st.session_state.get('user_name'), st.session_state.get('role'))
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        new_last = st.text_input("Фамилия", value=patient[1])
-    with col2:
-        new_first = st.text_input("Имя", value=patient[2])
-    
-    new_birth = st.date_input("Дата рождения", value=datetime.strptime(patient[3], "%Y-%m-%d").date())
-    new_location = st.text_input("Местоположение", value=patient[5] or "")
-    new_policy = st.text_input("Полис", value=patient[4] or "")
-    
-    st.divider()
-    st.subheader("Препараты")
-    
-    if 'edit_prescriptions_list' not in st.session_state or st.session_state.get('edit_patient_id_prev') != pid:
-        st.session_state['edit_prescriptions_list'] = [[p[1], p[2], p[3]] for p in prescs]
-        st.session_state['edit_patient_id_prev'] = pid
-    
-    items = st.session_state['edit_prescriptions_list']
-    
-    for idx, item in enumerate(items):
-        col1, col2, col3, col4 = st.columns([2.5, 1, 1.5, 0.5])
-        drug = col1.text_input(f"Препарат", value=item[0], key=f"drug_edit_{idx}")
-        dose = col2.text_input(f"мг", value=item[1], key=f"dose_edit_{idx}")
-        reg = col3.text_input(f"Регулярность", value=item[2], key=f"reg_edit_{idx}")
-        if col4.button("Удал.", key=f"del_edit_{idx}"):
-            items.pop(idx)
-            st.rerun()
-        items[idx] = [drug, dose, reg]
-    
-    if st.button("+ Добавить препарат"):
-        items.append(["", "", ""])
-        st.rerun()
-    
-    st.divider()
-    st.markdown("**Для общения с пациентом используйте специальную страницу чата (кнопка 💬 в списке пациентов).**")
-    
-    st.divider()
-    col1, col2 = st.columns([0.5, 0.5])
-    with col1:
-        if st.button("Сохранить"):
-            valid = [(d[0], d[1], d[2]) for d in items if d[0].strip()]
-            save_patient(pid, new_last, new_first, new_birth.isoformat(), new_policy, new_location, valid)
-            st.success("Сохранено")
-            if 'edit_prescriptions_list' in st.session_state:
-                del st.session_state['edit_prescriptions_list']
-            st.session_state['page'] = 'doctor_dashboard'
-            st.rerun()
-    
-    with col2:
-        if st.button("Назад"):
-            st.session_state['page'] = 'doctor_dashboard'
-            st.rerun()
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-    render_footer()
-
 # ========================== СТРАНИЦА ПАЦИЕНТА ==========================
 def patient_dashboard():
-    st.markdown('<div class="app-header"><div class="logo">Цифровая история назначений</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="app-header"><div class="logo">💊 Цифровая история назначений</div></div>', unsafe_allow_html=True)
     render_top_bar(st.session_state.get('user_name'), st.session_state.get('role'))
     
-    path_map = {"Пациент": "patient_dashboard"}
-    render_breadcrumb(["Пациент", "Главная"], path_map)
+    render_breadcrumb(["Главная"], {})
     
     pid = 1
     patient, prescs = get_patient_by_id(pid)
@@ -796,7 +1114,7 @@ def patient_dashboard():
     with col1:
         st.metric("ID", patient[0])
     with col2:
-        st.metric("Рецепты", len(prescs))
+        st.metric("Активные рецепты", len(prescs))
     with col3:
         st.metric("Полис", patient[4] if patient[4] else "-")
     
@@ -809,17 +1127,17 @@ def patient_dashboard():
         st.info("Нет рецептов")
     else:
         for p in prescs:
-            with st.expander(f"{p[1]} {p[2]} | {p[3]}"):
+            with st.expander(f"💊 {p[1]} ({p[2]}) - {p[3]}"):
                 st.write(f"**Дозировка:** {p[2]}")
-                st.write(f"**Частота:** {p[3]}")
-                st.write(f"**Период:** {p[4]} – {p[5]}")
+                st.write(f"**Частота приема:** {p[3]}")
+                st.write(f"**Период:** {p[4]} по {p[5]}")
     
     st.markdown('</div>', unsafe_allow_html=True)
     render_footer()
 
 # ========================== ВХОД ==========================
 def login_page():
-    st.markdown('<h1 class="login-header">Цифровая история назначений</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 style="text-align: center; color: #0A2F6C; margin-bottom: 3rem;">💊 Цифровая история назначений</h1>', unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([1, 1.5, 1])
     with col2:
@@ -831,7 +1149,7 @@ def login_page():
         role = st.selectbox(
             "Роль",
             options=["doctor", "patient"],
-            format_func=lambda x: "Врач" if x == "doctor" else "Пациент"
+            format_func=lambda x: "👨‍⚕️ Врач" if x == "doctor" else "👤 Пациент"
         )
         
         if st.button("Войти", use_container_width=True):
@@ -862,6 +1180,10 @@ else:
             doctor_edit_patient()
         elif page == 'doctor_chat':
             doctor_chat_page()
+        elif page == 'add_patient':
+            add_patient_page()
+        elif page == 'prescription_history':
+            patient_prescription_history()
         else:
             doctor_dashboard()
     else:
