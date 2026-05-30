@@ -6,15 +6,16 @@ import plotly.express as px
 from datetime import datetime, date, timedelta
 import hashlib
 import qrcode
-import calendar
+import calendar as cal
 from io import BytesIO
 import base64
 import random
+import numpy as np
 
 # ========================== НАСТРОЙКА СТРАНИЦЫ ==========================
 st.set_page_config(page_title="Цифровая история назначений", page_icon="💊", layout="wide", initial_sidebar_state="expanded")
 
-# ========================== CSS (МЕДИЦИНСКИЙ ТЁМНО-СИНИЙ СТИЛЬ) ==========================
+# ========================== CSS СТИЛЬ ==========================
 st.markdown("""
 <style>
     .stApp { background-color: #F0F4FA !important; }
@@ -55,12 +56,6 @@ st.markdown("""
                        border: none !important; font-weight: 500 !important; padding: 0.5rem 1rem !important; }
     .stButton button:hover { background-color: #1E3A8A !important; }
     
-    .btn-add { background-color: #28A745 !important; }
-    .btn-add:hover { background-color: #218838 !important; }
-    
-    .btn-history { background-color: #17A2B8 !important; }
-    .btn-history:hover { background-color: #138496 !important; }
-    
     table { width: 100%; border-collapse: collapse; }
     th { background-color: #E6EDF6; color: #0A2F6C; padding: 0.8rem; text-align: left; font-weight: 600; border-bottom: 2px solid #0A2F6C; }
     td { padding: 0.8rem; border-bottom: 1px solid #DCE5F0; color: #1F2A3E; }
@@ -68,12 +63,8 @@ st.markdown("""
     .stTabs [data-baseweb="tab-list"] { background-color: #FFFFFF; border-bottom: 1px solid #DCE5F0; }
     .stTabs [data-baseweb="tab"] { color: #4B5563; font-weight: 500; }
     .stTabs [aria-selected="true"] { color: #0A2F6C !important; border-bottom-color: #0A2F6C !important; }
-    .stTabs [data-baseweb="tab"] svg { display: none; }
     
     .breadcrumb { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; font-size: 0.9rem; color: #6B7280; }
-    .breadcrumb button { background: none !important; border: none !important; color: #6B7280 !important; 
-                         padding: 0 !important; font-size: 0.9rem !important; font-weight: normal !important; }
-    .breadcrumb button:hover { color: #0A2F6C !important; background: none !important; }
     .breadcrumb span { color: #0A2F6C; font-weight: 600; }
     
     .user-info { font-size: 0.9rem; color: #4B5563; text-align: right; }
@@ -91,7 +82,6 @@ st.markdown("""
         font-size: 1.4rem;
         font-weight: 600;
         color: #0A2F6C;
-        font-family: 'Segoe UI', Roboto, system-ui;
     }
     .app-footer {
         margin-top: 2rem;
@@ -99,7 +89,6 @@ st.markdown("""
         border-top: 1px solid #DCE5F0;
         font-size: 0.85rem;
         color: #6B7280;
-        text-align: left;
     }
     
     .chat-message-user {
@@ -126,11 +115,6 @@ st.markdown("""
         border-radius: 12px 12px 12px 4px;
         max-width: 70%;
     }
-    .chat-time {
-        font-size: 0.7rem;
-        opacity: 0.7;
-        margin-top: 0.25rem;
-    }
     
     [data-testid="stSidebar"] {
         background-color: #0A2F6C;
@@ -152,45 +136,41 @@ st.markdown("""
         color: #FFFFFF !important;
     }
     
-    .calendar-container {
-        display: grid;
-        grid-template-columns: repeat(7, 1fr);
-        gap: 8px;
+    .calendar-table {
+        width: 100%;
+        border-collapse: collapse;
         margin: 20px 0;
     }
     
-    .calendar-day {
-        aspect-ratio: 1;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 0.9rem;
-        background-color: #f9f9f9;
-        transition: background-color 0.2s;
+    .calendar-header {
+        background-color: #0A2F6C;
+        color: white;
+        padding: 10px;
+        text-align: center;
+        font-weight: bold;
     }
     
-    .calendar-day:hover {
-        background-color: #e9e9e9;
+    .calendar-day-header {
+        background-color: #E6EDF6;
+        color: #0A2F6C;
+        padding: 8px;
+        text-align: center;
+        font-weight: 600;
+        border: 1px solid #DCE5F0;
+    }
+    
+    .calendar-day {
+        border: 1px solid #DCE5F0;
+        padding: 8px;
+        text-align: center;
+        height: 60px;
+        vertical-align: top;
     }
     
     .calendar-day-active {
         background-color: #0A2F6C;
         color: white;
         font-weight: bold;
-        border-color: #0A2F6C;
-    }
-    
-    .calendar-day-empty {
-        background-color: transparent;
-        border: none;
-        cursor: default;
-    }
-    
-    .calendar-day-empty:hover {
-        background-color: transparent;
     }
     
     .history-item {
@@ -201,14 +181,28 @@ st.markdown("""
         border-radius: 4px;
     }
     
-    .history-item-active {
+    .polypharmacy-risk-low {
         background-color: #D4EDDA;
-        border-left-color: #28A745;
+        border-left: 4px solid #28A745;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        border-radius: 4px;
     }
     
-    .history-item-expired {
+    .polypharmacy-risk-medium {
+        background-color: #FFF3CD;
+        border-left: 4px solid #FFC107;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        border-radius: 4px;
+    }
+    
+    .polypharmacy-risk-high {
         background-color: #F8D7DA;
-        border-left-color: #DC3545;
+        border-left: 4px solid #DC3545;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        border-radius: 4px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -220,13 +214,12 @@ def init_db():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     
-    # Удаляем старые таблицы если существуют
     c.execute("DROP TABLE IF EXISTS patients")
     c.execute("DROP TABLE IF EXISTS prescriptions")
     c.execute("DROP TABLE IF EXISTS messages")
     c.execute("DROP TABLE IF EXISTS intake_log")
+    c.execute("DROP TABLE IF EXISTS drug_interactions")
     
-    # Создаем новые таблицы
     c.execute('''CREATE TABLE patients
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
                   last_name TEXT, first_name TEXT,
@@ -257,51 +250,60 @@ def init_db():
                   intake_date TEXT,
                   FOREIGN KEY(prescription_id) REFERENCES prescriptions(id))''')
     
+    c.execute('''CREATE TABLE drug_interactions
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  drug1 TEXT,
+                  drug2 TEXT,
+                  severity TEXT,
+                  description TEXT)''')
+    
     conn.commit()
     
     # Тестовые данные
-    first_names_m = ["Иван", "Петр", "Сергей", "Александр", "Виктор", "Дмитрий", "Павел", "Андрей", "Владимир", "Николай", "Алексей", "Константин", "Валентин", "Игорь", "Анатолий", "Евгений", "Борис", "Вячеслав", "Валерий", "Юрий"]
-    first_names_f = ["Анна", "Мария", "Елена", "Ольга", "Юлия", "Наталья", "Татьяна", "Галина", "Валентина", "Светлана", "Людмила", "Нина", "Раиса", "Вера", "Зинаида", "Маргарита", "Александра", "Ирина", "Виктория", "Екатерина"]
-    
-    last_names = ["Иванов", "Петров", "Сидоров", "Кузнецов", "Смирнов", "Волков", "Морозов", "Орлов", "Павлов", "Федоров", "Степанов", "Александров", "Никитин", "Соколов", "Васильев", "Новиков", "Фомин", "Герасимов", "Лавров", "Панов", "Козлов", "Лобанов", "Раков", "Леонов", "Климов", "Миронов", "Эмелин", "Власов", "Гордеев", "Давыдов"]
-    
-    locations = ["Москва", "Санкт-Петербург", "Казань", "Екатеринбург", "Новосибирск", "Пермь", "Челябинск", "Краснодар", "Самара", "Ростов-на-Дону"]
+    first_names_m = ["Иван", "Петр", "Сергей", "Александр", "Виктор", "Дмитрий", "Павел", "Андрей", "Владимир", "Николай"]
+    first_names_f = ["Анна", "Мария", "Елена", "Ольга", "Юлия", "Наталья", "Татьяна", "Галина", "Валентина", "Светлана"]
+    last_names = ["Иванов", "Петров", "Сидоров", "Кузнецов", "Смирнов", "Волков", "Морозов", "Орлов", "Павлов", "Соколов"]
+    locations = ["Москва", "Санкт-Петербург", "Казань", "Екатеринбург", "Новосибирск"]
     
     drugs_list = [
         ("Энап", "5 мг"), ("Аспирин Кардио", "100 мг"), ("Метформин", "500 мг"), 
         ("Амлодипин", "5 мг"), ("Метопролол", "50 мг"), ("Аторвастатин", "20 мг"),
         ("Омепразол", "20 мг"), ("Варфарин", "2.5 мг"), ("Глюкофаж", "1000 мг"),
-        ("Конкор", "2.5 мг"), ("Норваск", "5 мг"), ("Липримар", "10 мг"),
-        ("Кордарон", "200 мг"), ("Ловастатин", "20 мг"), ("Дигоксин", "0.25 мг"),
-        ("Вазопрессин", "10 ед"), ("Пропранолол", "40 мг"), ("Нифедипин", "10 мг"),
-        ("Спиронолактон", "25 мг"), ("Фуросемид", "40 мг"), ("Диклофенак", "50 мг"),
-        ("Ибупрофен", "200 мг"), ("Парацетамол", "500 мг"), ("Аспирин", "500 мг"),
     ]
     
-    for i in range(50):
-        gender = random.choice(["M", "F"])
-        first_name = random.choice(first_names_m if gender == "M" else first_names_f)
-        last_name = random.choice(last_names)
-        birth_year = random.randint(1950, 2005)
-        birth_month = random.randint(1, 12)
-        birth_day = random.randint(1, 28)
-        birth_date = f"{birth_year:04d}-{birth_month:02d}-{birth_day:02d}"
-        policy = f"{random.randint(1000000000, 9999999999)}"
-        location = random.choice(locations)
+    # Добавляем взаимодействия препаратов
+    interactions = [
+        ("Варфарин", "Аспирин Кардио", "high", "Увеличивает риск кровотечения"),
+        ("Метформин", "Омепразол", "medium", "Может влиять на всасывание"),
+        ("Амлодипин", "Метопролол", "medium", "Усиленное снижение давления"),
+        ("Энап", "Амлодипин", "medium", "Синергический эффект"),
+    ]
+    
+    for drug1, drug2, severity, desc in interactions:
+        c.execute("INSERT INTO drug_interactions (drug1, drug2, severity, description) VALUES (?,?,?,?)",
+                 (drug1, drug2, severity, desc))
+    
+    for i in range(30):
+        gender = "M" if i % 2 == 0 else "F"
+        first_name = first_names_m[i % len(first_names_m)] if gender == "M" else first_names_f[i % len(first_names_f)]
+        last_name = last_names[i % len(last_names)]
+        birth_year = 1950 + i
+        birth_date = f"{birth_year:04d}-{(i % 12) + 1:02d}-15"
+        policy = f"{1000000000 + i}"
+        location = locations[i % len(locations)]
         
         c.execute('''INSERT INTO patients (last_name, first_name, birth_date, policy, location, created_at) 
                     VALUES (?,?,?,?,?,?)''',
                  (last_name, first_name, birth_date, policy, location, datetime.now().isoformat()))
         
         pid = c.lastrowid
-        
-        num_drugs = random.randint(2, 5)
-        selected_drugs = random.sample(drugs_list, num_drugs)
+        num_drugs = random.randint(2, 6)
+        selected_drugs = random.sample(drugs_list, min(num_drugs, len(drugs_list)))
         
         for drug_name, dosage in selected_drugs:
             regularity = random.choice(["1 раз в день", "2 раза в день", "3 раза в день"])
-            start_date = (datetime.now() - timedelta(days=random.randint(30, 365))).strftime("%Y-%m-%d")
-            end_date = (datetime.now() + timedelta(days=random.randint(30, 365))).strftime("%Y-%m-%d")
+            start_date = (datetime.now() - timedelta(days=180)).strftime("%Y-%m-%d")
+            end_date = (datetime.now() + timedelta(days=180)).strftime("%Y-%m-%d")
             
             c.execute('''INSERT INTO prescriptions 
                        (patient_id, drug_name, dosage, regularity, start_date, end_date)
@@ -309,36 +311,15 @@ def init_db():
                      (pid, drug_name, dosage, regularity, start_date, end_date))
             
             presc_id = c.lastrowid
-            
-            # Добавляем записи о приеме препаратов в последний год
-            for day_offset in range(365):
-                if random.random() < 0.7:  # 70% вероятность приема в день
+            for day_offset in range(360):
+                if random.random() < 0.75:
                     intake_date = (datetime.now() - timedelta(days=day_offset)).strftime("%Y-%m-%d")
                     c.execute("INSERT INTO intake_log (prescription_id, intake_date) VALUES (?,?)",
                              (presc_id, intake_date))
-        
-        # Добавляем тестовые сообщения для первых 10 пациентов
-        if i < 10:
-            test_messages = [
-                "Добрый день! Подскажите, как правильно принимать Энап?",
-                "Здравствуйте, у меня болит голова после приема аспирина, это нормально?",
-                "Доктор, можно ли заменить Метформин на другой препарат?",
-                "Когда будет готов результат анализа?",
-                "Как часто нужно измерять давление?",
-                "Спасибо за назначение, чувствую себя лучше!",
-                "Что делать, если пропустил приём таблетки?",
-                "Есть ли побочные эффекты у нового лекарства?",
-                "Можно ли сочетать эти препараты с алкоголем?",
-                "Повысилось давление, что делать?"
-            ]
-            msg_text = random.choice(test_messages)
-            c.execute("INSERT INTO messages (patient_id, sender, message, timestamp) VALUES (?,?,?,?)",
-                     (pid, f"{first_name} {last_name}", msg_text, (datetime.now() - timedelta(days=random.randint(1, 5))).isoformat()))
     
     conn.commit()
     conn.close()
 
-# Инициализация БД только если это первый запуск
 if 'db_initialized' not in st.session_state:
     init_db()
     st.session_state['db_initialized'] = True
@@ -380,7 +361,7 @@ def get_patient_by_id(pid):
     patient = c.fetchone()
     
     if patient:
-        c.execute("SELECT id, drug_name, dosage, regularity, start_date, end_date FROM prescriptions WHERE patient_id=?", (pid,))
+        c.execute("SELECT id, drug_name, dosage, regularity, start_date, end_date FROM prescriptions WHERE patient_id=? ORDER BY start_date DESC", (pid,))
         prescs = c.fetchall()
         conn.close()
         return patient, prescs
@@ -389,37 +370,28 @@ def get_patient_by_id(pid):
     return None, []
 
 def get_prescription_history(patient_id):
-    """Получить историю всех когда-либо выписанных препаратов для пациента"""
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    
     c.execute("""SELECT DISTINCT p.id, p.drug_name, p.dosage, p.regularity, p.start_date, p.end_date 
-                 FROM prescriptions p 
-                 WHERE p.patient_id=? 
-                 ORDER BY p.start_date DESC""", (patient_id,))
+                 FROM prescriptions p WHERE p.patient_id=? ORDER BY p.start_date DESC""", (patient_id,))
     prescs = c.fetchall()
     conn.close()
     return prescs
 
 def get_intake_dates_for_prescription(prescription_id):
-    """Получить все даты приема для конкретного назначения"""
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    
     c.execute("SELECT intake_date FROM intake_log WHERE prescription_id=? ORDER BY intake_date DESC", (prescription_id,))
     dates = [row[0] for row in c.fetchall()]
     conn.close()
     return dates
 
-def get_intakes_for_date(prescription_id, intake_date):
-    """Получить информацию о приеме на конкретную дату"""
+def get_drug_interactions(drug1, drug2):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    
-    c.execute("""SELECT p.id, p.drug_name, p.dosage, p.regularity, il.intake_date
-                 FROM prescriptions p
-                 LEFT JOIN intake_log il ON p.id = il.prescription_id
-                 WHERE p.id=? AND il.intake_date=?""", (prescription_id, intake_date))
+    c.execute("""SELECT severity, description FROM drug_interactions 
+                 WHERE (drug1=? AND drug2=?) OR (drug1=? AND drug2=?)""", 
+             (drug1, drug2, drug2, drug1))
     result = c.fetchone()
     conn.close()
     return result
@@ -474,15 +446,60 @@ def get_all_prescriptions():
     conn.close()
     return data
 
+def analyze_polypharmacy(patient_id):
+    """Анализ полипрагмазии пациента"""
+    _, prescriptions = get_patient_by_id(patient_id)
+    patient, _ = get_patient_by_id(patient_id)
+    
+    # Вычисляем возраст
+    birth_date = datetime.strptime(patient[3], "%Y-%m-%d").date()
+    age = (date.today() - birth_date).days // 365
+    
+    num_drugs = len(prescriptions)
+    
+    # Определяем риск
+    if age >= 65:
+        thresholds = {'low': 2, 'medium': 4, 'high': 7, 'critical': 10}
+    else:
+        thresholds = {'low': 3, 'medium': 5, 'high': 8, 'critical': 11}
+    
+    if num_drugs >= thresholds['critical']:
+        risk_level = 'critical'
+    elif num_drugs >= thresholds['high']:
+        risk_level = 'high'
+    elif num_drugs >= thresholds['medium']:
+        risk_level = 'medium'
+    else:
+        risk_level = 'low'
+    
+    # Проверяем взаимодействия
+    interactions = []
+    for i, presc1 in enumerate(prescriptions):
+        for presc2 in prescriptions[i+1:]:
+            result = get_drug_interactions(presc1[1], presc2[1])
+            if result:
+                interactions.append({
+                    'drug1': presc1[1],
+                    'drug2': presc2[1],
+                    'severity': result[0],
+                    'description': result[1]
+                })
+    
+    return {
+        'num_drugs': num_drugs,
+        'age': age,
+        'risk_level': risk_level,
+        'interactions': interactions
+    }
+
 # ========================== КОМПОНЕНТЫ UI ==========================
-def render_breadcrumb(path, page_map):
-    """Отображает кликабельные хлебные крошки (без кнопки Врач на странице пациентов)"""
+def render_breadcrumb(path):
     breadcrumb_html = '<div class="breadcrumb">'
     for i, item in enumerate(path):
         if i == len(path) - 1:
             breadcrumb_html += f'<span>{item}</span>'
         else:
-            breadcrumb_html += f'<span class="crumb-link">{item}</span> > '
+            breadcrumb_html += f'<span>{item}</span> > '
     breadcrumb_html += '</div>'
     st.markdown(breadcrumb_html, unsafe_allow_html=True)
 
@@ -490,9 +507,67 @@ def render_top_bar(username, role):
     st.markdown(f"<div class='user-info'>Добро пожаловать, <strong>{username}</strong> ({role.upper()})</div>", unsafe_allow_html=True)
 
 def render_footer():
-    st.markdown('<div class="app-footer">Цифровая история назначений | v2.0</div>', unsafe_allow_html=True)
+    st.markdown('<div class="app-footer">Цифровая история назначений | Версия 3.0</div>', unsafe_allow_html=True)
 
-# ========================== СТРАНИЦА ИСТОРИИ ПРЕПАРАТОВ ==========================
+# ========================== СТРАНИЦА ЧАТА ==========================
+def doctor_chat_page():
+    pid = st.session_state.get('chat_patient_id')
+    if not pid:
+        st.session_state['page'] = 'doctor_dashboard'
+        st.rerun()
+    
+    patient, _ = get_patient_by_id(pid)
+    full_name = f"{patient[1]} {patient[2]}"
+    
+    render_breadcrumb([f"Чат с {full_name}"])
+    
+    st.markdown(f'<div class="card"><div class="card-header">Чат с пациентом {full_name}</div>', unsafe_allow_html=True)
+    
+    messages = get_messages(pid)
+    if not messages:
+        st.info("Нет сообщений")
+    
+    for sender, msg, timestamp in messages:
+        time_obj = datetime.fromisoformat(timestamp)
+        time_str = time_obj.strftime("%H:%M")
+        if sender == st.session_state.get('user_name'):
+            st.markdown(f"""
+            <div class="chat-message-user">
+                <div>
+                    <div>{msg}</div>
+                    <div style="font-size: 0.7rem; opacity: 0.7; margin-top: 0.25rem;">{time_str}</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown(f"""
+            <div class="chat-message-assistant">
+                <div>
+                    <div><strong>{sender}</strong><br>{msg}</div>
+                    <div style="font-size: 0.7rem; opacity: 0.7; margin-top: 0.25rem;">{time_str}</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+    
+    st.divider()
+    col1, col2 = st.columns([0.85, 0.15])
+    with col1:
+        new_msg = st.text_area("Сообщение:", key="chat_input", height=80, label_visibility="collapsed", placeholder="Напишите сообщение...")
+    with col2:
+        if st.button("Отправить", use_container_width=True):
+            if new_msg.strip():
+                add_message(pid, st.session_state.get('user_name', 'Врач'), new_msg)
+                st.rerun()
+    
+    st.divider()
+    if st.button("Вернуться на страницу пациентов"):
+        st.session_state['page'] = 'doctor_dashboard'
+        st.rerun()
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    render_footer()
+
+# ========================== ИСТОРИЯ ПРЕПАРАТОВ ==========================
 def patient_prescription_history():
     pid = st.session_state.get('history_patient_id')
     if not pid:
@@ -502,141 +577,127 @@ def patient_prescription_history():
     patient, _ = get_patient_by_id(pid)
     full_name = f"{patient[1]} {patient[2]}"
     
-    render_breadcrumb([f"История препаратов: {full_name}"], {})
-    
     st.markdown(f'<div class="card"><div class="card-header">История препаратов пациента: {full_name}</div>', unsafe_allow_html=True)
+    
+    if st.button("Вернуться к редактированию"):
+        st.session_state['page'] = 'doctor_edit'
+        st.rerun()
+    
+    st.divider()
     
     all_prescriptions = get_prescription_history(pid)
     
     if not all_prescriptions:
         st.info("История препаратов отсутствует")
-        if st.button("← Вернуться к редактированию"):
-            st.session_state['page'] = 'doctor_edit'
-            st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
         return
     
-    # Выбор препарата
-    st.subheader("Выберите препарат для просмотра истории приема")
+    st.subheader("Полная история назначений")
+    
+    for idx, presc in enumerate(all_prescriptions):
+        presc_id, drug_name, dosage, regularity, start_date, end_date = presc
+        is_active = datetime.strptime(end_date, "%Y-%m-%d").date() >= date.today()
+        status = "Активный" if is_active else "Завершен"
+        status_color = "#28A745" if is_active else "#DC3545"
+        
+        st.markdown(f"""
+        <div class="history-item">
+            <strong>{drug_name}</strong> ({dosage})<br>
+            Частота: {regularity}<br>
+            Период: {start_date} - {end_date}<br>
+            <span style="color: {status_color}; font-weight: bold;">Статус: {status}</span>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.divider()
+    st.subheader("История приема")
     
     selected_drug_idx = st.selectbox(
-        "Препараты:",
+        "Выберите препарат для просмотра приема:",
         range(len(all_prescriptions)),
-        format_func=lambda i: f"{all_prescriptions[i][1]} ({all_prescriptions[i][2]}) - {all_prescriptions[i][4]} по {all_prescriptions[i][5]}"
+        format_func=lambda i: f"{all_prescriptions[i][1]} ({all_prescriptions[i][2]})"
     )
     
     selected_prescription = all_prescriptions[selected_drug_idx]
-    presc_id, drug_name, dosage, regularity, start_date, end_date = selected_prescription
+    presc_id = selected_prescription[0]
+    drug_name = selected_prescription[1]
     
-    # Информация о препарате
-    col1, col2, col3, col4 = st.columns(4)
+    st.subheader(f"История приема: {drug_name}")
+    
+    # Выбор месяца и года
+    col1, col2 = st.columns(2)
     with col1:
-        st.metric("Название", drug_name)
+        month_num = st.selectbox(
+            "Месяц:",
+            range(1, 13),
+            format_func=lambda x: ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", 
+                                   "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"][x-1]
+        )
     with col2:
-        st.metric("Дозировка", dosage)
-    with col3:
-        st.metric("Частота", regularity)
-    with col4:
-        is_active = datetime.strptime(end_date, "%Y-%m-%d").date() >= date.today()
-        st.metric("Статус", "🟢 Активен" if is_active else "🔴 Завершен")
-    
-    st.divider()
-    
-    # Календарь последнего года
-    st.subheader("Календарь приема препарата (последний год)")
+        selected_year = st.selectbox("Год:", range(date.today().year - 1, date.today().year + 1))
     
     # Получаем даты приема
     intake_dates = get_intake_dates_for_prescription(presc_id)
     intake_dates_set = set(intake_dates)
     
-    # Выбор месяца и года
-    col1, col2 = st.columns(2)
-    with col1:
-        selected_month = st.selectbox("Месяц:", range(1, 13), format_func=lambda x: calendar.month_name[x])
-    with col2:
-        selected_year = st.selectbox("Год:", range(date.today().year - 1, date.today().year + 1))
-    
     # Отображение календаря
-    st.markdown("### Календарь приема")
+    calendar_data = cal.monthcalendar(selected_year, month_num)
+    month_name = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", 
+                  "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"][month_num - 1]
     
-    # Получаем информацию о дне недели и количество дней в месяце
-    cal = calendar.monthcalendar(selected_year, selected_month)
+    st.markdown(f"<h4 style='text-align: center; color: #0A2F6C;'>{month_name} {selected_year}</h4>", unsafe_allow_html=True)
     
-    # Дни недели
-    days_of_week = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+    # HTML таблица календаря
+    html_calendar = '<table class="calendar-table"><tr>'
+    days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
     
-    col_days = st.columns(7)
-    for i, day in enumerate(days_of_week):
-        col_days[i].write(f"**{day}**")
+    for day in days:
+        html_calendar += f'<td class="calendar-day-header">{day}</td>'
+    html_calendar += '</tr><tr>'
     
-    # Календарь
-    cols = st.columns(7)
-    for week in cal:
-        for day_idx, day in enumerate(week):
-            with cols[day_idx]:
-                if day == 0:
-                    st.write("")
-                else:
-                    date_str = f"{selected_year:04d}-{selected_month:02d}-{day:02d}"
-                    is_taken = date_str in intake_dates_set
-                    
-                    if is_taken:
-                        st.markdown(f"""
-                        <div style='background-color: #0A2F6C; color: white; padding: 8px; 
-                                    border-radius: 4px; text-align: center; cursor: pointer; 
-                                    font-weight: bold;'>{day}</div>
-                        """, unsafe_allow_html=True)
-                        
-                        if st.button(f"Подробно", key=f"intake_{date_str}"):
-                            st.session_state['selected_intake_date'] = date_str
-                    else:
-                        st.markdown(f"""
-                        <div style='background-color: #F0F4FA; padding: 8px; 
-                                    border-radius: 4px; text-align: center;'>{day}</div>
-                        """, unsafe_allow_html=True)
+    day_count = 0
+    for week in calendar_data:
+        for day in week:
+            if day == 0:
+                html_calendar += '<td class="calendar-day"></td>'
+            else:
+                date_str = f"{selected_year:04d}-{month_num:02d}-{day:02d}"
+                is_taken = date_str in intake_dates_set
+                bg_color = '#0A2F6C' if is_taken else '#FFFFFF'
+                text_color = 'white' if is_taken else '#1F2A3E'
+                font_weight = 'bold' if is_taken else 'normal'
+                
+                html_calendar += f'<td class="calendar-day" style="background-color: {bg_color}; color: {text_color}; font-weight: {font_weight};">{day}</td>'
+            
+            day_count += 1
+            if day_count % 7 == 0:
+                html_calendar += '</tr><tr>'
     
-    # Если выбран день, показываем подробности
-    if 'selected_intake_date' in st.session_state:
-        intake_date = st.session_state['selected_intake_date']
-        st.divider()
-        st.subheader(f"Прием препарата на {intake_date}")
-        
-        intake_info = get_intakes_for_date(presc_id, intake_date)
-        if intake_info:
-            st.info(f"""
-            **Препарат:** {intake_info[1]}  
-            **Дозировка:** {intake_info[2]}  
-            **Частота:** {intake_info[3]}  
-            **Дата приема:** {intake_info[4]}
-            """)
+    html_calendar += '</tr></table>'
+    st.markdown(html_calendar, unsafe_allow_html=True)
     
     st.divider()
     
-    # История приемов в виде таблицы
-    st.subheader("История приемов (последние 30 дней)")
+    # История приемов
+    st.subheader("История приема препарата")
     
-    recent_intakes = [d for d in intake_dates[:30]]
+    recent_intakes = intake_dates[:30]
     
     if recent_intakes:
         intake_df = pd.DataFrame({
             'Дата приема': recent_intakes,
             'Препарат': [drug_name] * len(recent_intakes),
-            'Дозировка': [dosage] * len(recent_intakes),
-            'Статус': ['✓ Принято'] * len(recent_intakes)
+            'Статус': ['Принято'] * len(recent_intakes)
         })
-        st.dataframe(intake_df, use_container_width=True)
+        st.dataframe(intake_df, use_container_width=True, hide_index=True)
     else:
-        st.info("Нет записей о приеме препарата в последние 30 дней")
+        st.info("Нет записей о приеме препарата")
     
     st.markdown('</div>', unsafe_allow_html=True)
-    
-    if st.button("← Вернуться к редактированию"):
-        st.session_state['page'] = 'doctor_edit'
-        st.rerun()
 
-# ========================== СТРАНИЦА ДОБАВЛЕНИЯ ПАЦИЕНТА ==========================
+# ========================== ДОБАВЛЕНИЕ ПАЦИЕНТА ==========================
 def add_patient_page():
-    render_breadcrumb(["Добавить пациента"], {})
+    render_breadcrumb(["Добавить пациента"])
     
     st.markdown('<div class="card"><div class="card-header">Добавить нового пациента</div>', unsafe_allow_html=True)
     
@@ -657,13 +718,11 @@ def add_patient_page():
     st.divider()
     st.subheader("Препараты (опционально)")
     
-    # Инициализация списка препаратов при первом входе
     if 'new_patient_prescriptions_list' not in st.session_state:
         st.session_state['new_patient_prescriptions_list'] = []
     
     items = st.session_state['new_patient_prescriptions_list']
     
-    # Отображение существующих препаратов
     if items:
         for idx, item in enumerate(items):
             col1, col2, col3, col4 = st.columns([2.5, 1, 1.5, 0.5])
@@ -683,90 +742,36 @@ def add_patient_page():
     
     col1, col2 = st.columns([0.5, 0.5])
     with col1:
-        if st.button("✅ Добавить пациента", use_container_width=True, key="submit_new_patient"):
+        if st.button("Добавить пациента", use_container_width=True, key="submit_new_patient"):
             if last_name and first_name and policy:
                 pid = add_new_patient(last_name, first_name, birth_date.isoformat(), policy, location)
                 
-                # Добавляем препараты если они были введены
                 if items:
                     conn = sqlite3.connect(DB_NAME)
                     c = conn.cursor()
                     for drug in items:
-                        if drug[0].strip():  # Только если название препарата не пустое
+                        if drug[0].strip():
                             c.execute("INSERT INTO prescriptions (patient_id, drug_name, dosage, regularity, start_date, end_date) VALUES (?,?,?,?,?,?)",
                                      (pid, drug[0], drug[1], drug[2], date.today().isoformat(), (date.today() + timedelta(days=30)).isoformat()))
                     conn.commit()
                     conn.close()
                 
-                st.success(f"✅ Пациент {first_name} {last_name} успешно добавлен!")
+                st.success(f"Пациент {first_name} {last_name} успешно добавлен!")
                 if 'new_patient_prescriptions_list' in st.session_state:
                     del st.session_state['new_patient_prescriptions_list']
                 st.session_state['page'] = 'doctor_dashboard'
                 st.rerun()
             else:
-                st.error("❌ Пожалуйста, заполните все обязательные поля (Фамилия, Имя, Полис)")
+                st.error("Пожалуйста, заполните обязательные поля (Фамилия, Имя, Полис)")
     
     with col2:
-        if st.button("❌ Отмена", use_container_width=True, key="cancel_new_patient"):
+        if st.button("Отмена", use_container_width=True, key="cancel_new_patient"):
             if 'new_patient_prescriptions_list' in st.session_state:
                 del st.session_state['new_patient_prescriptions_list']
             st.session_state['page'] = 'doctor_dashboard'
             st.rerun()
     
     st.markdown('</div>', unsafe_allow_html=True)
-
-# ========================== ЧАТ ==========================
-def doctor_chat_page():
-    pid = st.session_state.get('chat_patient_id')
-    if not pid:
-        st.session_state['page'] = 'doctor_dashboard'
-        st.rerun()
-    
-    patient, _ = get_patient_by_id(pid)
-    full_name = f"{patient[1]} {patient[2]}"
-    
-    render_breadcrumb([f"Чат с {full_name}"], {})
-    
-    st.markdown(f'<div class="card"><div class="card-header">Чат с пациентом {full_name}</div>', unsafe_allow_html=True)
-    
-    messages = get_messages(pid)
-    if not messages:
-        st.info("Нет сообщений. Напишите пациенту.")
-    
-    for sender, msg, timestamp in messages:
-        time_obj = datetime.fromisoformat(timestamp)
-        time_str = time_obj.strftime("%H:%M")
-        if sender == st.session_state.get('user_name'):
-            st.markdown(f"""
-            <div class="chat-message-user">
-                <div>
-                    <div>{msg}</div>
-                    <div class="chat-time">{time_str}</div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown(f"""
-            <div class="chat-message-assistant">
-                <div>
-                    <div><strong>{sender}</strong><br>{msg}</div>
-                    <div class="chat-time">{time_str}</div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-    
-    st.divider()
-    col1, col2 = st.columns([0.85, 0.15])
-    with col1:
-        new_msg = st.text_area("Ваше сообщение:", key="chat_input", height=100, label_visibility="collapsed", placeholder="Напишите сообщение пациенту...")
-    with col2:
-        if st.button("Отправить", use_container_width=True):
-            if new_msg.strip():
-                add_message(pid, st.session_state.get('user_name', 'Врач'), new_msg)
-                st.rerun()
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-    render_footer()
 
 # ========================== РЕДАКТИРОВАНИЕ ПАЦИЕНТА ==========================
 def doctor_edit_patient():
@@ -776,7 +781,7 @@ def doctor_edit_patient():
         st.rerun()
     
     patient, prescs = get_patient_by_id(pid)
-    render_breadcrumb([f"Редактирование: {patient[1]} {patient[2]}"], {})
+    render_breadcrumb([f"Редактирование: {patient[1]} {patient[2]}"])
     
     st.markdown(f'<div class="card"><div class="card-header">Редактирование: {patient[1]} {patient[2]}</div>', unsafe_allow_html=True)
     render_top_bar(st.session_state.get('user_name'), st.session_state.get('role'))
@@ -818,20 +823,21 @@ def doctor_edit_patient():
     
     col1, col2, col3 = st.columns(3)
     with col1:
-        if st.button("📋 История препаратов", use_container_width=True):
+        if st.button("История препаратов", use_container_width=True):
             st.session_state['history_patient_id'] = pid
             st.session_state['page'] = 'prescription_history'
             st.rerun()
     
     with col2:
-        if st.button("💬 Чат", use_container_width=True):
+        if st.button("Чат", use_container_width=True):
             st.session_state['chat_patient_id'] = pid
             st.session_state['page'] = 'doctor_chat'
             st.rerun()
     
     with col3:
-        if st.button("🔍 Аналитика", use_container_width=True):
-            st.session_state['page'] = 'doctor_dashboard'
+        if st.button("Анализ", use_container_width=True):
+            st.session_state['analysis_patient_id'] = pid
+            st.session_state['page'] = 'polypharmacy_analysis'
             st.rerun()
     
     st.divider()
@@ -855,8 +861,168 @@ def doctor_edit_patient():
     st.markdown('</div>', unsafe_allow_html=True)
     render_footer()
 
-# ========================== СТРАНИЦА ПАЦИЕНТОВ (С УЛУЧШЕННЫМ ПОИСКОМ) ==========================
+# ========================== АНАЛИЗ ПОЛИПРАГМАЗИИ ==========================
+def polypharmacy_analysis():
+    pid = st.session_state.get('analysis_patient_id')
+    if not pid:
+        st.session_state['page'] = 'doctor_dashboard'
+        st.rerun()
+    
+    patient, prescriptions = get_patient_by_id(pid)
+    full_name = f"{patient[1]} {patient[2]}"
+    
+    render_breadcrumb([f"Анализ полипрагмазии: {full_name}"])
+    
+    st.markdown(f'<div class="card"><div class="card-header">Анализ полипрагмазии пациента: {full_name}</div>', unsafe_allow_html=True)
+    
+    if st.button("Вернуться к редактированию"):
+        st.session_state['page'] = 'doctor_edit'
+        st.rerun()
+    
+    st.divider()
+    
+    # Анализ полипрагмазии
+    analysis = analyze_polypharmacy(pid)
+    
+    num_drugs = analysis['num_drugs']
+    age = analysis['age']
+    risk_level = analysis['risk_level']
+    interactions = analysis['interactions']
+    
+    # Определение цвета и описания риска
+    risk_colors = {
+        'low': ('#D4EDDA', '#28A745'),
+        'medium': ('#FFF3CD', '#FFC107'),
+        'high': ('#F8D7DA', '#DC3545'),
+        'critical': ('#F8D7DA', '#DC3545')
+    }
+    
+    risk_labels = {
+        'low': 'Низкий риск',
+        'medium': 'Средний риск',
+        'high': 'Высокий риск',
+        'critical': 'Критический риск'
+    }
+    
+    bg_color, border_color = risk_colors.get(risk_level, ('#F0F4FA', '#0A2F6C'))
+    
+    st.markdown(f"""
+    <div style="background-color: {bg_color}; border-left: 4px solid {border_color}; padding: 1rem; margin-bottom: 1rem; border-radius: 4px;">
+        <strong>Возраст:</strong> {age} лет<br>
+        <strong>Количество препаратов:</strong> {num_drugs}<br>
+        <strong style="color: {border_color};">Уровень риска: {risk_labels[risk_level]}</strong>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.divider()
+    
+    # Список препаратов
+    st.subheader("Назначенные препараты")
+    for presc in prescriptions:
+        st.markdown(f"**{presc[1]}** ({presc[2]}) - {presc[3]}")
+    
+    st.divider()
+    
+    # Анализ взаимодействий
+    if interactions:
+        st.subheader("Выявленные взаимодействия")
+        for interaction in interactions:
+            severity_color = {
+                'low': '#D4EDDA',
+                'medium': '#FFF3CD',
+                'high': '#F8D7DA'
+            }.get(interaction['severity'], '#F0F4FA')
+            
+            severity_label = {
+                'low': 'Слабое взаимодействие',
+                'medium': 'Среднее взаимодействие',
+                'high': 'Сильное взаимодействие'
+            }.get(interaction['severity'], 'Неизвестное')
+            
+            st.markdown(f"""
+            <div style="background-color: {severity_color}; border-left: 4px solid; padding: 1rem; margin-bottom: 1rem; border-radius: 4px;">
+                <strong>{interaction['drug1']}</strong> + <strong>{interaction['drug2']}</strong><br>
+                <strong>Тип:</strong> {severity_label}<br>
+                <strong>Описание:</strong> {interaction['description']}
+            </div>
+            """, unsafe_allow_html=True)
+    else:
+        st.info("Значительных взаимодействий между препаратами не выявлено")
+    
+    st.divider()
+    
+    # Графики анализа
+    st.subheader("Графический анализ")
+    
+    # График 1: Распределение препаратов по частоте
+    freqs = {}
+    for presc in prescriptions:
+        freq = presc[3]
+        freqs[freq] = freqs.get(freq, 0) + 1
+    
+    if freqs:
+        fig1 = px.bar(
+            x=list(freqs.keys()),
+            y=list(freqs.values()),
+            labels={'x': 'Частота приема', 'y': 'Количество препаратов'},
+            title="Распределение препаратов по частоте приема"
+        )
+        fig1.update_traces(marker_color='#0A2F6C')
+        st.plotly_chart(fig1, use_container_width=True)
+    
+    # График 2: Риск по возрастным группам
+    age_groups = {
+        'Молодые (до 40)': 0,
+        'Средний возраст (40-65)': 0,
+        'Пожилые (65+)': 0
+    }
+    
+    if age < 40:
+        age_groups['Молодые (до 40)'] = num_drugs
+    elif age < 65:
+        age_groups['Средний возраст (40-65)'] = num_drugs
+    else:
+        age_groups['Пожилые (65+)'] = num_drugs
+    
+    fig2 = px.pie(
+        values=[v for v in age_groups.values() if v > 0],
+        names=[k for k, v in age_groups.items() if v > 0],
+        title="Позиционирование по возрастной группе"
+    )
+    st.plotly_chart(fig2, use_container_width=True)
+    
+    st.divider()
+    
+    # Рекомендации
+    st.subheader("Рекомендации")
+    
+    recommendations = []
+    
+    if risk_level in ['high', 'critical']:
+        recommendations.append("Рассмотрите возможность уменьшения количества препаратов")
+        recommendations.append("Обратитесь к клиническому фармакологу для оптимизации терапии")
+    
+    if age >= 65 and num_drugs >= 5:
+        recommendations.append("Для пожилого пациента количество препаратов выше рекомендуемого")
+        recommendations.append("Проведите переоценку необходимости каждого препарата")
+    
+    if interactions:
+        recommendations.append("Обратите внимание на выявленные взаимодействия")
+        recommendations.append("Рассмотрите замену одного из взаимодействующих препаратов")
+    
+    if recommendations:
+        for i, rec in enumerate(recommendations, 1):
+            st.markdown(f"**{i}.** {rec}")
+    else:
+        st.info("Специальных рекомендаций не требуется")
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    render_footer()
+
+# ========================== СТРАНИЦА ПАЦИЕНТОВ ==========================
 def doctor_patients_page():
+    st.markdown('<div class="card"><div class="card-header">Список пациентов</div>', unsafe_allow_html=True)
+    
     st.markdown('<div class="search-container">', unsafe_allow_html=True)
     st.markdown('<h4 style="margin: 0 0 1rem 0;">Поиск по параметрам</h4>', unsafe_allow_html=True)
     
@@ -880,19 +1046,19 @@ def doctor_patients_page():
     
     with col_search:
         st.markdown('<label class="search-label" style="opacity: 0;">.</label>', unsafe_allow_html=True)
-        search_button = st.button("🔍", use_container_width=True, key="search_btn")
+        search_button = st.button("Поиск", use_container_width=True, key="search_btn")
     
     with col_add:
         st.markdown('<label class="search-label" style="opacity: 0;">.</label>', unsafe_allow_html=True)
-        add_button = st.button("➕ Добавить", use_container_width=True, key="add_btn")
+        add_button = st.button("Добавить", use_container_width=True, key="add_btn")
     
     if add_button:
         st.session_state['page'] = 'add_patient'
         st.rerun()
     
     st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
     
-    # Выполнение поиска
     if search_button:
         patients = get_all_patients(search_name, birth_filter, location_filter, patient_id_filter)
     else:
@@ -903,10 +1069,8 @@ def doctor_patients_page():
     if not patients:
         st.info("Пациенты не найдены")
     else:
-        st.markdown(f"**Найдено пациентов: {len(patients)}**")
         st.divider()
         
-        # Отображение таблицы
         cols_header = st.columns([0.5, 1.2, 1.2, 1.2, 1.5, 0.8, 0.8, 0.8])
         for col, header in zip(cols_header, ["ID", "Фамилия", "Имя", "Дата рожд", "Местоположение", "Препараты", "Чат", "Действия"]):
             col.markdown(f"**{header}**")
@@ -924,21 +1088,21 @@ def doctor_patients_page():
             cols[4].write(location)
             cols[5].write(drugs if len(drugs) < 30 else drugs[:27] + "...")
             
-            if cols[6].button("💬", key=f"chat_{pid}", help="Чат с пациентом"):
+            if cols[6].button("Чат", key=f"chat_{pid}", use_container_width=True):
                 st.session_state['chat_patient_id'] = pid
                 st.session_state['page'] = 'doctor_chat'
                 st.rerun()
             
-            if cols[7].button("✏️", key=f"edit_{pid}", help="Редактировать"):
+            if cols[7].button("Ред.", key=f"edit_{pid}", use_container_width=True):
                 st.session_state['edit_patient_id'] = pid
                 st.session_state['page'] = 'doctor_edit'
                 st.rerun()
     
     st.markdown('</div>', unsafe_allow_html=True)
 
-# ========================== АНАЛИТИКА ПРЕПАРАТОВ ==========================
+# ========================== АНАЛИТИКА ==========================
 def drug_analytics_dashboard():
-    render_breadcrumb(["Аналитика"], {})
+    render_breadcrumb(["Аналитика"])
     
     st.markdown('<div class="card"><div class="card-header">Аналитика лекарственных препаратов</div>', unsafe_allow_html=True)
     
@@ -962,7 +1126,7 @@ def drug_analytics_dashboard():
     
     st.divider()
     
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Топ препаратов", "Распределение по дозировке", "Частота назначения", "Анализ по группам", "Статистика"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Топ препаратов", "По дозировке", "Частота приема", "По группам", "Статистика"])
     
     with tab1:
         st.subheader("Топ 15 назначенных препаратов")
@@ -976,55 +1140,37 @@ def drug_analytics_dashboard():
             labels={'x': 'Количество назначений', 'y': 'Препарат'},
             title="Самые часто назначаемые препараты"
         )
-        fig.update_layout(height=500, showlegend=False, hovermode='y unified')
+        fig.update_layout(height=500, showlegend=False)
         st.plotly_chart(fig, use_container_width=True)
         
-        st.markdown("**Статистика:**")
-        st.write(f"- Самый часто назначаемый препарат: **{top_drugs.index[0]}** ({top_drugs.values[0]} раз)")
-        st.write(f"- Средняя популярность препарата: **{top_drugs.mean():.1f}** назначений")
+        st.write(f"Самый назначаемый: **{top_drugs.index[0]}** ({top_drugs.values[0]} назначений)")
+        st.write(f"Средняя популярность: **{top_drugs.mean():.1f}** назначений")
     
     with tab2:
         st.subheader("Распределение по дозировке")
         dosage_counts = df["Дозировка"].value_counts().head(10)
-        fig = go.Figure(data=[
-            go.Pie(labels=dosage_counts.index, values=dosage_counts.values, 
-                   marker=dict(colors=px.colors.sequential.Blues_r))
-        ])
-        fig.update_layout(title="Распределение дозировок в назначениях", height=500)
+        fig = px.pie(labels=dosage_counts.index, values=dosage_counts.values, 
+                    title="Распределение дозировок")
         st.plotly_chart(fig, use_container_width=True)
     
     with tab3:
-        st.subheader("Частота назначения")
+        st.subheader("Частота приема")
         freq_counts = df["Регулярность"].value_counts()
-        colors_map = {"1 раз в день": "#0A2F6C", "2 раза в день": "#1E3A8A", "3 раза в день": "#3B82F6"}
-        fig = go.Figure(data=[
-            go.Bar(
-                x=freq_counts.index,
-                y=freq_counts.values,
-                marker_color=[colors_map.get(f, "#6B7280") for f in freq_counts.index]
-            )
-        ])
-        fig.update_layout(
-            title="Распределение по частоте приема",
-            xaxis_title="Частота приема",
-            yaxis_title="Количество",
-            height=400,
-            showlegend=False
+        fig = px.bar(
+            x=freq_counts.index,
+            y=freq_counts.values,
+            labels={'x': 'Частота приема', 'y': 'Количество'},
+            title="Распределение по частоте приема"
         )
+        fig.update_traces(marker_color='#0A2F6C')
         st.plotly_chart(fig, use_container_width=True)
-        
-        st.markdown("**Анализ:**")
-        for freq, count in freq_counts.items():
-            percentage = (count / len(df)) * 100
-            st.write(f"- **{freq}**: {count} назначений ({percentage:.1f}%)")
     
     with tab4:
-        st.subheader("Анализ по группам препаратов")
+        st.subheader("Анализ по группам")
         drug_groups = {
-            "Кардиологические": ["Энап", "Метопролол", "Амлодипин", "Варфарин", "Конкор", "Норваск", "Кордарон", "Дигоксин"],
+            "Кардиологические": ["Энап", "Метопролол", "Амлодипин", "Варфарин"],
             "Эндокринологические": ["Метформин", "Глюкофаж"],
             "Гастроэнтерологические": ["Омепразол"],
-            "Анальгетики": ["Диклофенак", "Ибупрофен", "Парацетамол", "Аспирин"],
             "Другие": []
         }
         
@@ -1039,95 +1185,96 @@ def drug_analytics_dashboard():
             if not found:
                 group_counts["Другие"] = group_counts.get("Другие", 0) + len(df[df["Препарат"] == drug])
         
-        fig = px.pie(
-            values=list(group_counts.values()),
-            names=list(group_counts.keys()),
-            title="Распределение препаратов по группам",
-            color_discrete_sequence=px.colors.sequential.Blues_r
-        )
+        fig = px.pie(values=list(group_counts.values()), names=list(group_counts.keys()),
+                    title="Препараты по фармакологическим группам")
         st.plotly_chart(fig, use_container_width=True)
-        
-        st.markdown("**Статистика по группам:**")
-        for group, count in sorted(group_counts.items(), key=lambda x: x[1], reverse=True):
-            percentage = (count / len(df)) * 100
-            st.write(f"- **{group}**: {count} назначений ({percentage:.1f}%)")
     
     with tab5:
         st.subheader("Статистический анализ")
-        col1, col2 = st.columns(2)
         
+        col1, col2 = st.columns(2)
         with col1:
-            st.markdown("**Препараты с наибольшей дозировкой:**")
+            st.write("**Препараты с наибольшей дозировкой:**")
             max_dosage = df.groupby("Препарат")["Дозировка"].first().sort_values(ascending=False).head(5)
             for drug, dose in max_dosage.items():
                 st.write(f"- {drug}: {dose}")
         
         with col2:
-            st.markdown("**Распределение начальных дат назначений:**")
-            df["Месяц"] = pd.to_datetime(df["Дата_начала"]).dt.to_period("M")
-            monthly_counts = df.groupby("Месяц").size()
+            st.write("**Диапазон дат назначений:**")
             st.write(f"- Начало: {df['Дата_начала'].min()}")
             st.write(f"- Конец: {df['Дата_начала'].max()}")
-            st.write(f"- Среднее по месяцам: {len(df) / len(monthly_counts):.0f} назначений")
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# ========================== НАЛИЧИЕ ЛП ==========================
+def drug_availability_page():
+    render_breadcrumb(["Наличие лекарственных препаратов"])
+    
+    st.markdown('<div class="card"><div class="card-header">Проверка наличия лекарственных препаратов</div>', unsafe_allow_html=True)
+    
+    drug_name = st.text_input("Введите название препарата")
+    
+    if drug_name:
+        # Получаем всех препаратов из БД
+        all_prescriptions = get_all_prescriptions()
+        df = pd.DataFrame(all_prescriptions, columns=["Препарат", "Дозировка", "Регулярность", "Дата"])
         
-        st.divider()
+        # Фильтруем по названию
+        matching_drugs = df[df["Препарат"].str.contains(drug_name, case=False, na=False)]
         
-        st.markdown("**Временная динамика назначений:**")
-        monthly_df = df.copy()
-        monthly_df["Месяц"] = pd.to_datetime(monthly_df["Дата_начала"]).dt.to_period("M").astype(str)
-        timeline = monthly_df.groupby("Месяц").size().reset_index(name="Количество")
-        
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=timeline["Месяц"],
-            y=timeline["Количество"],
-            mode='lines+markers',
-            name='Назначения',
-            line=dict(color='#0A2F6C', width=3),
-            marker=dict(size=10)
-        ))
-        fig.update_layout(
-            title="Динамика назначений по месяцам",
-            xaxis_title="Месяц",
-            yaxis_title="Количество назначений",
-            height=400,
-            hovermode='x unified'
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        if not matching_drugs.empty:
+            st.subheader(f"Результаты по '{drug_name}':")
+            
+            # Подсчет назначений по дозировкам
+            dosage_counts = matching_drugs["Дозировка"].value_counts()
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.write("**Количество назначений по дозировкам:**")
+                for dosage, count in dosage_counts.items():
+                    st.write(f"- {dosage}: {count} назначений")
+            
+            with col2:
+                fig = px.pie(values=dosage_counts.values, names=dosage_counts.index,
+                            title=f"Распределение препарата '{drug_name}' по дозировкам")
+                st.plotly_chart(fig, use_container_width=True)
+            
+            st.divider()
+            
+            # Таблица подробных данных
+            st.write("**Подробная информация:**")
+            st.dataframe(matching_drugs, use_container_width=True, hide_index=True)
+        else:
+            st.info(f"Препарат '{drug_name}' не найден в системе")
     
     st.markdown('</div>', unsafe_allow_html=True)
 
 # ========================== СТРАНИЦА ВРАЧА ==========================
 def doctor_dashboard():
-    st.markdown('<div class="app-header"><div class="logo">💊 Цифровая история назначений</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="app-header"><div class="logo">Цифровая история назначений</div></div>', unsafe_allow_html=True)
     render_top_bar(st.session_state.get('user_name'), st.session_state.get('role'))
 
     if 'doctor_selected_tab' not in st.session_state:
         st.session_state.doctor_selected_tab = "Пациенты"
 
-    # Боковое меню
     with st.sidebar:
-        st.markdown("## 📋 Навигация")
-        
-        # Кнопка для контроля состояния боковой панели
-        if st.button("📌 Закрепить меню", key="pin_menu", use_container_width=True):
-            st.session_state['sidebar_pinned'] = not st.session_state.get('sidebar_pinned', True)
-        
-        st.divider()
+        st.markdown("## Навигация")
         
         for tab in ["Пациенты", "Отсроченное обслуживание", "Наличие ЛП", "Аналитика"]:
             if st.button(tab, key=f"sidebar_{tab}", use_container_width=True):
                 st.session_state.doctor_selected_tab = tab
                 st.rerun()
+        
         st.markdown("---")
         st.markdown("<div style='flex-grow: 1;'></div>", unsafe_allow_html=True)
-        if st.button("🚪 ВЫХОД", key="logout_btn", use_container_width=True):
+        
+        if st.button("Выход", key="logout_btn", use_container_width=True):
             st.session_state['authenticated'] = False
             st.session_state.clear()
             st.rerun()
 
     selected_tab = st.session_state.doctor_selected_tab
-    render_breadcrumb([selected_tab], {})
+    render_breadcrumb([selected_tab])
 
     if selected_tab == "Пациенты":
         doctor_patients_page()
@@ -1136,68 +1283,27 @@ def doctor_dashboard():
         st.info("Рецепты, которые пациент может получить позже")
         st.markdown('</div>', unsafe_allow_html=True)
     elif selected_tab == "Наличие ЛП":
-        st.markdown('<div class="card"><div class="card-header">Проверка наличия в аптеках</div>', unsafe_allow_html=True)
-        drug_name = st.text_input("Введите название препарата")
-        if drug_name:
-            st.info(f"Поиск наличия препарата: {drug_name}")
-        st.markdown('</div>', unsafe_allow_html=True)
+        drug_availability_page()
     elif selected_tab == "Аналитика":
         drug_analytics_dashboard()
 
     render_footer()
 
-# ========================== СТРАНИЦА ПАЦИЕНТА ==========================
-def patient_dashboard():
-    st.markdown('<div class="app-header"><div class="logo">💊 Цифровая история назначений</div></div>', unsafe_allow_html=True)
-    render_top_bar(st.session_state.get('user_name'), st.session_state.get('role'))
-    
-    render_breadcrumb(["Главная"], {})
-    
-    pid = 1
-    patient, prescs = get_patient_by_id(pid)
-    
-    st.markdown(f'<div class="card"><div class="card-header">Добро пожаловать, {patient[1]} {patient[2]}</div>', unsafe_allow_html=True)
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("ID", patient[0])
-    with col2:
-        st.metric("Активные рецепты", len(prescs))
-    with col3:
-        st.metric("Полис", patient[4] if patient[4] else "-")
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-    st.divider()
-    
-    st.markdown('<div class="card"><div class="card-header">Мои назначения</div>', unsafe_allow_html=True)
-    
-    if not prescs:
-        st.info("Нет рецептов")
-    else:
-        for p in prescs:
-            with st.expander(f"💊 {p[1]} ({p[2]}) - {p[3]}"):
-                st.write(f"**Дозировка:** {p[2]}")
-                st.write(f"**Частота приема:** {p[3]}")
-                st.write(f"**Период:** {p[4]} по {p[5]}")
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-    render_footer()
-
 # ========================== ВХОД ==========================
 def login_page():
-    st.markdown('<h1 style="text-align: center; color: #0A2F6C; margin-bottom: 3rem;">💊 Цифровая история назначений</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 style="text-align: center; color: #0A2F6C; margin-bottom: 3rem;">Цифровая история назначений</h1>', unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([1, 1.5, 1])
     with col2:
         st.subheader("Вход в систему")
         
-        username = st.text_input("Логин", placeholder="врач1 или пациент1")
+        username = st.text_input("Логин", placeholder="врач1")
         password = st.text_input("Пароль", type="password", placeholder="пароль")
         
         role = st.selectbox(
             "Роль",
             options=["doctor", "patient"],
-            format_func=lambda x: "👨‍⚕️ Врач" if x == "doctor" else "👤 Пациент"
+            format_func=lambda x: "Врач" if x == "doctor" else "Пациент"
         )
         
         if st.button("Войти", use_container_width=True):
@@ -1232,7 +1338,9 @@ else:
             add_patient_page()
         elif page == 'prescription_history':
             patient_prescription_history()
+        elif page == 'polypharmacy_analysis':
+            polypharmacy_analysis()
         else:
             doctor_dashboard()
     else:
-        patient_dashboard()
+        st.markdown('<h1>Доступ как пациент</h1>', unsafe_allow_html=True)
