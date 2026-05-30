@@ -204,6 +204,14 @@ st.markdown("""
         margin-bottom: 1rem;
         border-radius: 4px;
     }
+    
+    .recommendation-item {
+        background-color: #E8F0FE;
+        border-left: 4px solid #0A2F6C;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        border-radius: 4px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -219,11 +227,13 @@ def init_db():
     c.execute("DROP TABLE IF EXISTS messages")
     c.execute("DROP TABLE IF EXISTS intake_log")
     c.execute("DROP TABLE IF EXISTS drug_interactions")
+    c.execute("DROP TABLE IF EXISTS recommendations")
     
     c.execute('''CREATE TABLE patients
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
                   last_name TEXT, first_name TEXT,
                   birth_date TEXT, policy TEXT, location TEXT,
+                  contraindications TEXT,
                   created_at TEXT)''')
     
     c.execute('''CREATE TABLE prescriptions
@@ -231,7 +241,10 @@ def init_db():
                   patient_id INTEGER, 
                   drug_name TEXT,
                   dosage TEXT, 
-                  regularity TEXT, 
+                  regularity TEXT,
+                  reason TEXT,
+                  food_relation TEXT,
+                  special_instructions TEXT,
                   start_date TEXT, 
                   end_date TEXT,
                   FOREIGN KEY(patient_id) REFERENCES patients(id))''')
@@ -256,6 +269,14 @@ def init_db():
                   drug2 TEXT,
                   severity TEXT,
                   description TEXT)''')
+    
+    c.execute('''CREATE TABLE recommendations
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  patient_id INTEGER,
+                  specialist TEXT,
+                  text TEXT,
+                  date TEXT,
+                  FOREIGN KEY(patient_id) REFERENCES patients(id))''')
     
     conn.commit()
     
@@ -291,10 +312,11 @@ def init_db():
         birth_date = f"{birth_year:04d}-{(i % 12) + 1:02d}-15"
         policy = f"{1000000000 + i}"
         location = locations[i % len(locations)]
+        contraindications = "Аллергия на пенициллин" if i % 5 == 0 else ""
         
-        c.execute('''INSERT INTO patients (last_name, first_name, birth_date, policy, location, created_at) 
-                    VALUES (?,?,?,?,?,?)''',
-                 (last_name, first_name, birth_date, policy, location, datetime.now().isoformat()))
+        c.execute('''INSERT INTO patients (last_name, first_name, birth_date, policy, location, contraindications, created_at) 
+                    VALUES (?,?,?,?,?,?,?)''',
+                 (last_name, first_name, birth_date, policy, location, contraindications, datetime.now().isoformat()))
         
         pid = c.lastrowid
         num_drugs = random.randint(2, 6)
@@ -302,13 +324,16 @@ def init_db():
         
         for drug_name, dosage in selected_drugs:
             regularity = random.choice(["1 раз в день", "2 раза в день", "3 раза в день"])
+            reason = random.choice(["Гипертония", "Сахарный диабет", "Профилактика инсульта", "Снижение холестерина"])
+            food_relation = random.choice(["До еды", "После еды", "Во время еды", "Не зависит от еды"])
+            special_instructions = random.choice(["Запивать водой", "Не разжёвывать", "Избегать алкоголя", "Принимать утром"])
             start_date = (datetime.now() - timedelta(days=180)).strftime("%Y-%m-%d")
             end_date = (datetime.now() + timedelta(days=180)).strftime("%Y-%m-%d")
             
             c.execute('''INSERT INTO prescriptions 
-                       (patient_id, drug_name, dosage, regularity, start_date, end_date)
-                       VALUES (?,?,?,?,?,?)''',
-                     (pid, drug_name, dosage, regularity, start_date, end_date))
+                       (patient_id, drug_name, dosage, regularity, reason, food_relation, special_instructions, start_date, end_date)
+                       VALUES (?,?,?,?,?,?,?,?,?)''',
+                     (pid, drug_name, dosage, regularity, reason, food_relation, special_instructions, start_date, end_date))
             
             presc_id = c.lastrowid
             for day_offset in range(360):
@@ -316,6 +341,16 @@ def init_db():
                     intake_date = (datetime.now() - timedelta(days=day_offset)).strftime("%Y-%m-%d")
                     c.execute("INSERT INTO intake_log (prescription_id, intake_date) VALUES (?,?)",
                              (presc_id, intake_date))
+        
+        # Добавляем тестовые рекомендации
+        recs = [
+            ("Терапевт", "Регулярно измеряйте артериальное давление", datetime.now().isoformat()),
+            ("Кардиолог", "Соблюдайте диету с низким содержанием соли", datetime.now().isoformat()),
+            ("Диетолог", "Пейте не менее 1.5 литров воды в день", datetime.now().isoformat())
+        ]
+        for spec, text, dt in recs:
+            c.execute("INSERT INTO recommendations (patient_id, specialist, text, date) VALUES (?,?,?,?)",
+                     (pid, spec, text, dt))
     
     conn.commit()
     conn.close()
@@ -329,7 +364,7 @@ def get_all_patients(search_query="", birth_date_filter="", location_filter="", 
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     
-    query = "SELECT id, last_name, first_name, birth_date, policy, location FROM patients WHERE 1=1"
+    query = "SELECT id, last_name, first_name, birth_date, policy, location, contraindications FROM patients WHERE 1=1"
     params = []
     
     if search_query:
@@ -357,11 +392,11 @@ def get_patient_by_id(pid):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     
-    c.execute("SELECT id, last_name, first_name, birth_date, policy, location FROM patients WHERE id=?", (pid,))
+    c.execute("SELECT id, last_name, first_name, birth_date, policy, location, contraindications FROM patients WHERE id=?", (pid,))
     patient = c.fetchone()
     
     if patient:
-        c.execute("SELECT id, drug_name, dosage, regularity, start_date, end_date FROM prescriptions WHERE patient_id=? ORDER BY start_date DESC", (pid,))
+        c.execute("SELECT id, drug_name, dosage, regularity, reason, food_relation, special_instructions, start_date, end_date FROM prescriptions WHERE patient_id=? ORDER BY start_date DESC", (pid,))
         prescs = c.fetchall()
         conn.close()
         return patient, prescs
@@ -396,28 +431,30 @@ def get_drug_interactions(drug1, drug2):
     conn.close()
     return result
 
-def add_new_patient(last_name, first_name, birth_date, policy, location):
+def add_new_patient(last_name, first_name, birth_date, policy, location, contraindications):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("INSERT INTO patients (last_name, first_name, birth_date, policy, location, created_at) VALUES (?,?,?,?,?,?)",
-             (last_name, first_name, birth_date, policy, location, datetime.now().isoformat()))
+    c.execute("INSERT INTO patients (last_name, first_name, birth_date, policy, location, contraindications, created_at) VALUES (?,?,?,?,?,?,?)",
+             (last_name, first_name, birth_date, policy, location, contraindications, datetime.now().isoformat()))
     pid = c.lastrowid
     conn.commit()
     conn.close()
     return pid
 
-def save_patient(pid, last_name, first_name, birth_date, policy, location, prescriptions_list):
+def save_patient(pid, last_name, first_name, birth_date, policy, location, contraindications, prescriptions_list):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     
-    c.execute("UPDATE patients SET last_name=?, first_name=?, birth_date=?, policy=?, location=? WHERE id=?",
-             (last_name, first_name, birth_date, policy, location, pid))
+    c.execute("UPDATE patients SET last_name=?, first_name=?, birth_date=?, policy=?, location=?, contraindications=? WHERE id=?",
+             (last_name, first_name, birth_date, policy, location, contraindications, pid))
     
     c.execute("DELETE FROM prescriptions WHERE patient_id=?", (pid,))
     
     for drug in prescriptions_list:
-        c.execute("INSERT INTO prescriptions (patient_id, drug_name, dosage, regularity, start_date, end_date) VALUES (?,?,?,?,?,?)",
-                 (pid, drug[0], drug[1], drug[2], "2026-05-01", "2026-06-01"))
+        # drug: (drug_name, dosage, regularity, reason, food_relation, special_instructions, start_date, end_date)
+        if len(drug) >= 8:
+            c.execute("INSERT INTO prescriptions (patient_id, drug_name, dosage, regularity, reason, food_relation, special_instructions, start_date, end_date) VALUES (?,?,?,?,?,?,?,?,?)",
+                     (pid, drug[0], drug[1], drug[2], drug[3], drug[4], drug[5], drug[6], drug[7]))
     
     conn.commit()
     conn.close()
@@ -492,6 +529,56 @@ def analyze_polypharmacy(patient_id):
         'interactions': interactions
     }
 
+# Новые функции для расширенной работы с БД (не конфликтуют со старыми)
+def add_prescription(pid, drug_name, dosage, regularity, reason, food_relation, special_instructions, start_date, end_date):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("INSERT INTO prescriptions (patient_id, drug_name, dosage, regularity, reason, food_relation, special_instructions, start_date, end_date) VALUES (?,?,?,?,?,?,?,?,?)",
+             (pid, drug_name, dosage, regularity, reason, food_relation, special_instructions, start_date, end_date))
+    conn.commit()
+    conn.close()
+
+def get_prescriptions_for_patient(pid, active_only=True):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    query = "SELECT id, drug_name, dosage, regularity, reason, food_relation, special_instructions, start_date, end_date FROM prescriptions WHERE patient_id=?"
+    if active_only:
+        query += " AND end_date >= date('now')"
+    c.execute(query, (pid,))
+    rows = c.fetchall()
+    conn.close()
+    return rows
+
+def add_intake_record(prescription_id, intake_date):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("INSERT INTO intake_log (prescription_id, intake_date) VALUES (?,?)", (prescription_id, intake_date))
+    conn.commit()
+    conn.close()
+
+def get_recommendations(pid):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("SELECT specialist, text, date FROM recommendations WHERE patient_id=? ORDER BY date DESC", (pid,))
+    rows = c.fetchall()
+    conn.close()
+    return rows
+
+def get_drug_instructions(drug_name):
+    """Заглушка инструкции к препарату (можно расширить)"""
+    instructions_db = {
+        "Энап": "Ингибитор АПФ. Применяется при гипертонии и сердечной недостаточности. Побочные эффекты: сухой кашель, головокружение.",
+        "Аспирин Кардио": "Антиагрегант. Профилактика тромбозов. Принимать после еды, запивать водой.",
+        "Метформин": "Противодиабетическое средство. Принимать во время или после еды, чтобы снизить риск желудочно-кишечных расстройств.",
+        "Амлодипин": "Блокатор кальциевых каналов. Снижает артериальное давление. Принимать в одно и то же время суток.",
+        "Метопролол": "Бета-блокатор. Урежает пульс, снижает давление. Нельзя резко отменять.",
+        "Аторвастатин": "Статин. Снижает холестерин. Принимать вечером.",
+        "Омепразол": "Ингибитор протонной помпы. Снижает кислотность желудка. Принимать утром натощак.",
+        "Варфарин": "Антикоагулянт. Требует контроля МНО. Избегать продуктов с витамином К.",
+        "Глюкофаж": "Метформин пролонгированного действия. Принимать вечером с едой."
+    }
+    return instructions_db.get(drug_name, "Инструкция временно отсутствует. Пожалуйста, обратитесь к врачу или к официальной инструкции.")
+
 # ========================== КОМПОНЕНТЫ UI ==========================
 def render_breadcrumb(path):
     breadcrumb_html = '<div class="breadcrumb">'
@@ -507,7 +594,7 @@ def render_top_bar(username, role):
     st.markdown(f"<div class='user-info'>Добро пожаловать, <strong>{username}</strong> ({role.upper()})</div>", unsafe_allow_html=True)
 
 def render_footer():
-    st.markdown('<div class="app-footer">Цифровая история назначений | Версия 3.0</div>', unsafe_allow_html=True)
+    st.markdown('<div class="app-footer">Цифровая история назначений | Версия 4.0</div>', unsafe_allow_html=True)
 
 # ========================== СТРАНИЦА ЧАТА ==========================
 def doctor_chat_page():
@@ -653,7 +740,7 @@ def patient_prescription_history():
     
     for day in days:
         html_calendar += f'<td class="calendar-day-header">{day}</td>'
-    html_calendar += '<tr><tr>'
+    html_calendar += '<tr></tr>'
     
     day_count = 0
     for week in calendar_data:
@@ -695,7 +782,7 @@ def patient_prescription_history():
     
     st.markdown('</div>', unsafe_allow_html=True)
 
-# ========================== ДОБАВЛЕНИЕ ПАЦИЕНТА ==========================
+# ========================== ДОБАВЛЕНИЕ ПАЦИЕНТА (РАСШИРЕННОЕ) ==========================
 def add_patient_page():
     render_breadcrumb(["Добавить пациента"])
     
@@ -715,6 +802,8 @@ def add_patient_page():
     with col2:
         location = st.text_input("Местоположение", placeholder="Москва")
     
+    contraindications = st.text_area("Противопоказания", placeholder="Аллергии, хронические заболевания...")
+    
     st.divider()
     st.subheader("Препараты (опционально)")
     
@@ -725,17 +814,26 @@ def add_patient_page():
     
     if items:
         for idx, item in enumerate(items):
-            col1, col2, col3, col4 = st.columns([2.5, 1, 1.5, 0.5])
-            drug = col1.text_input(f"Препарат", value=item[0], key=f"new_drug_{idx}")
-            dose = col2.text_input(f"мг", value=item[1], key=f"new_dose_{idx}")
-            reg = col3.text_input(f"Регулярность", value=item[2], key=f"new_reg_{idx}")
-            if col4.button("Удал.", key=f"del_new_{idx}"):
-                items.pop(idx)
-                st.rerun()
-            items[idx] = [drug, dose, reg]
+            with st.container():
+                st.markdown(f"**Препарат {idx+1}**")
+                col1, col2, col3, col4 = st.columns(4)
+                drug = col1.text_input("Название", value=item[0] if len(item)>0 else "", key=f"new_drug_{idx}")
+                dosage = col2.text_input("Дозировка", value=item[1] if len(item)>1 else "", key=f"new_dose_{idx}")
+                regularity = col3.text_input("Регулярность", value=item[2] if len(item)>2 else "", key=f"new_reg_{idx}")
+                reason = col4.text_input("Причина назначения", value=item[3] if len(item)>3 else "", key=f"new_reason_{idx}")
+                col5, col6, col7, col8 = st.columns(4)
+                food = col5.text_input("Связь с едой", value=item[4] if len(item)>4 else "", key=f"new_food_{idx}")
+                special = col6.text_input("Особые указания", value=item[5] if len(item)>5 else "", key=f"new_spec_{idx}")
+                start = col7.text_input("Дата начала (ГГГГ-ММ-ДД)", value=item[6] if len(item)>6 else date.today().isoformat(), key=f"new_start_{idx}")
+                end = col8.text_input("Дата окончания (ГГГГ-ММ-ДД)", value=item[7] if len(item)>7 else (date.today()+timedelta(days=30)).isoformat(), key=f"new_end_{idx}")
+                if st.button("Удалить", key=f"del_new_{idx}"):
+                    items.pop(idx)
+                    st.rerun()
+                items[idx] = [drug, dosage, regularity, reason, food, special, start, end]
+                st.divider()
     
     if st.button("+ Добавить препарат", key="add_new_drug"):
-        items.append(["", "", ""])
+        items.append(["", "", "", "", "", "", date.today().isoformat(), (date.today()+timedelta(days=30)).isoformat()])
         st.rerun()
     
     st.divider()
@@ -744,17 +842,12 @@ def add_patient_page():
     with col1:
         if st.button("Добавить пациента", use_container_width=True, key="submit_new_patient"):
             if last_name and first_name and policy:
-                pid = add_new_patient(last_name, first_name, birth_date.isoformat(), policy, location)
+                pid = add_new_patient(last_name, first_name, birth_date.isoformat(), policy, location, contraindications)
                 
                 if items:
-                    conn = sqlite3.connect(DB_NAME)
-                    c = conn.cursor()
                     for drug in items:
                         if drug[0].strip():
-                            c.execute("INSERT INTO prescriptions (patient_id, drug_name, dosage, regularity, start_date, end_date) VALUES (?,?,?,?,?,?)",
-                                     (pid, drug[0], drug[1], drug[2], date.today().isoformat(), (date.today() + timedelta(days=30)).isoformat()))
-                    conn.commit()
-                    conn.close()
+                            add_prescription(pid, drug[0], drug[1], drug[2], drug[3], drug[4], drug[5], drug[6], drug[7])
                 
                 st.success(f"Пациент {first_name} {last_name} успешно добавлен!")
                 if 'new_patient_prescriptions_list' in st.session_state:
@@ -773,7 +866,7 @@ def add_patient_page():
     
     st.markdown('</div>', unsafe_allow_html=True)
 
-# ========================== РЕДАКТИРОВАНИЕ ПАЦИЕНТА ==========================
+# ========================== РЕДАКТИРОВАНИЕ ПАЦИЕНТА (РАСШИРЕННОЕ) ==========================
 def doctor_edit_patient():
     pid = st.session_state.get('edit_patient_id')
     if not pid:
@@ -795,28 +888,39 @@ def doctor_edit_patient():
     new_birth = st.date_input("Дата рождения", value=datetime.strptime(patient[3], "%Y-%m-%d").date())
     new_location = st.text_input("Местоположение", value=patient[5] or "")
     new_policy = st.text_input("Полис", value=patient[4] or "")
+    contraindications = st.text_area("Противопоказания", value=patient[6] or "")
     
     st.divider()
     st.subheader("Текущие назначения")
     
     if 'edit_prescriptions_list' not in st.session_state or st.session_state.get('edit_patient_id_prev') != pid:
-        st.session_state['edit_prescriptions_list'] = [[p[1], p[2], p[3]] for p in prescs]
+        # Преобразуем prescs (id, drug_name, dosage, regularity, reason, food_relation, special_instructions, start_date, end_date)
+        st.session_state['edit_prescriptions_list'] = [[p[1], p[2], p[3], p[4] or "", p[5] or "", p[6] or "", p[7], p[8]] for p in prescs]
         st.session_state['edit_patient_id_prev'] = pid
     
     items = st.session_state['edit_prescriptions_list']
     
     for idx, item in enumerate(items):
-        col1, col2, col3, col4 = st.columns([2.5, 1, 1.5, 0.5])
-        drug = col1.text_input(f"Препарат", value=item[0], key=f"drug_edit_{idx}")
-        dose = col2.text_input(f"мг", value=item[1], key=f"dose_edit_{idx}")
-        reg = col3.text_input(f"Регулярность", value=item[2], key=f"reg_edit_{idx}")
-        if col4.button("Удал.", key=f"del_edit_{idx}"):
-            items.pop(idx)
-            st.rerun()
-        items[idx] = [drug, dose, reg]
+        with st.container():
+            st.markdown(f"**Препарат {idx+1}**")
+            col1, col2, col3, col4 = st.columns(4)
+            drug = col1.text_input("Название", value=item[0], key=f"drug_edit_{idx}")
+            dosage = col2.text_input("Дозировка", value=item[1], key=f"dose_edit_{idx}")
+            regularity = col3.text_input("Регулярность", value=item[2], key=f"reg_edit_{idx}")
+            reason = col4.text_input("Причина", value=item[3], key=f"reason_edit_{idx}")
+            col5, col6, col7, col8 = st.columns(4)
+            food = col5.text_input("Связь с едой", value=item[4], key=f"food_edit_{idx}")
+            special = col6.text_input("Особые указания", value=item[5], key=f"spec_edit_{idx}")
+            start = col7.text_input("Дата начала (ГГГГ-ММ-ДД)", value=item[6], key=f"start_edit_{idx}")
+            end = col8.text_input("Дата окончания (ГГГГ-ММ-ДД)", value=item[7], key=f"end_edit_{idx}")
+            if st.button("Удалить", key=f"del_edit_{idx}"):
+                items.pop(idx)
+                st.rerun()
+            items[idx] = [drug, dosage, regularity, reason, food, special, start, end]
+            st.divider()
     
-    if st.button("+ Добавить препарат"):
-        items.append(["", "", ""])
+    if st.button("+ Добавить препарат", key="add_edit_drug"):
+        items.append(["", "", "", "", "", "", date.today().isoformat(), (date.today()+timedelta(days=30)).isoformat()])
         st.rerun()
     
     st.divider()
@@ -845,8 +949,8 @@ def doctor_edit_patient():
     col1, col2 = st.columns([0.5, 0.5])
     with col1:
         if st.button("Сохранить", use_container_width=True):
-            valid = [(d[0], d[1], d[2]) for d in items if d[0].strip()]
-            save_patient(pid, new_last, new_first, new_birth.isoformat(), new_policy, new_location, valid)
+            valid = [(d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7]) for d in items if d[0].strip()]
+            save_patient(pid, new_last, new_first, new_birth.isoformat(), new_policy, new_location, contraindications, valid)
             st.success("Изменения сохранены")
             if 'edit_prescriptions_list' in st.session_state:
                 del st.session_state['edit_prescriptions_list']
@@ -1019,7 +1123,7 @@ def polypharmacy_analysis():
     st.markdown('</div>', unsafe_allow_html=True)
     render_footer()
 
-# ========================== СТРАНИЦА ПАЦИЕНТОВ (ИСПРАВЛЕННАЯ) ==========================
+# ========================== СТРАНИЦА ПАЦИЕНТОВ (СПИСОК) ==========================
 def doctor_patients_page():
     # Единая карточка для всего блока пациентов
     st.markdown('<div class="card">', unsafe_allow_html=True)
@@ -1073,7 +1177,7 @@ def doctor_patients_page():
         st.divider()
 
         # Вывод строк с пациентами
-        for pid, last_name, first_name, birth_date, policy, location in patients:
+        for pid, last_name, first_name, birth_date, policy, location, _ in patients:
             _, prescs = get_patient_by_id(pid)
             drugs = ", ".join([p[1] for p in prescs]) if prescs else "Нет"
             drugs_short = drugs if len(drugs) < 30 else drugs[:27] + "..."
@@ -1287,6 +1391,134 @@ def doctor_dashboard():
 
     render_footer()
 
+# ========================== СТРАНИЦА ПАЦИЕНТА (НОВЫЙ ФУНКЦИОНАЛ) ==========================
+def patient_dashboard():
+    # Для демонстрации используем первого пациента из БД (в реальности надо брать по логину)
+    patients = get_all_patients()
+    if not patients:
+        st.warning("Нет зарегистрированных пациентов")
+        return
+    # Берём первого пациента как текущего (в реальной системе пациент входит по своим данным)
+    pid = patients[0][0]
+    patient, _ = get_patient_by_id(pid)
+    full_name = f"{patient[1]} {patient[2]}"
+    
+    st.markdown(f'<div class="app-header"><div class="logo">Цифровая история назначений</div><div class="user-info">{full_name}</div></div>', unsafe_allow_html=True)
+    
+    tabs = st.tabs(["💊 Мои препараты", "⏰ Напоминания и приём", "📋 Рекомендации", "🛒 Заказ лекарств"])
+    
+    # Вкладка "Мои препараты"
+    with tabs[0]:
+        st.subheader("Активные назначения")
+        prescs = get_prescriptions_for_patient(pid, active_only=True)
+        if not prescs:
+            st.info("Нет активных назначений")
+        else:
+            for presc in prescs:
+                presc_id, drug_name, dosage, regularity, reason, food_relation, special_instructions, start_date, end_date = presc
+                with st.expander(f"{drug_name} ({dosage}) - {regularity}"):
+                    st.markdown(f"**Причина назначения:** {reason}")
+                    st.markdown(f"**Связь с приёмом пищи:** {food_relation}")
+                    st.markdown(f"**Особые указания:** {special_instructions}")
+                    st.markdown(f"**Период приёма:** {start_date} – {end_date}")
+                    if st.button(f"📄 Инструкция к {drug_name}", key=f"instr_{presc_id}"):
+                        instructions = get_drug_instructions(drug_name)
+                        st.info(instructions)
+        st.divider()
+        st.subheader("Противопоказания")
+        contraindications = patient[6] if len(patient) > 6 else ""
+        if contraindications:
+            st.warning(contraindications)
+        else:
+            st.success("Противопоказаний не указано")
+    
+    # Вкладка "Напоминания и приём"
+    with tabs[1]:
+        st.subheader("Приём препаратов на сегодня")
+        today_str = date.today().isoformat()
+        active_prescs = get_prescriptions_for_patient(pid, active_only=True)
+        if not active_prescs:
+            st.info("Нет активных назначений")
+        else:
+            for presc in active_prescs:
+                presc_id, drug_name, dosage, regularity, *_ = presc
+                taken_dates = get_intake_dates_for_prescription(presc_id)
+                if today_str not in taken_dates:
+                    col1, col2 = st.columns([3,1])
+                    col1.write(f"**{drug_name}** ({dosage}) – {regularity}")
+                    if col2.button("✅ Отметить", key=f"take_{presc_id}"):
+                        add_intake_record(presc_id, today_str)
+                        st.success(f"Приём {drug_name} отмечен!")
+                        st.rerun()
+                else:
+                    st.success(f"✅ {drug_name} – уже принято сегодня")
+        st.divider()
+        st.subheader("Календарь приёма")
+        if active_prescs:
+            selected_drug_idx = st.selectbox("Выберите препарат", range(len(active_prescs)), format_func=lambda i: active_prescs[i][1])
+            selected = active_prescs[selected_drug_idx]
+            presc_id = selected[0]
+            drug_name = selected[1]
+            intake_dates = get_intake_dates_for_prescription(presc_id)
+            intake_set = set(intake_dates)
+            now = datetime.now()
+            cal_data = cal.monthcalendar(now.year, now.month)
+            st.write(f"**{drug_name} – {now.strftime('%B %Y')}**")
+            days = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс']
+            header_html = "<table class='calendar-table'><tr>" + "".join(f"<th>{d}</th>" for d in days) + "</tr>"
+            body_html = ""
+            for week in cal_data:
+                body_html += "<tr>"
+                for day in week:
+                    if day == 0:
+                        body_html += "<td></td>"
+                    else:
+                        date_str = f"{now.year}-{now.month:02d}-{day:02d}"
+                        taken = date_str in intake_set
+                        bg = "#0A2F6C" if taken else "#FFFFFF"
+                        color = "white" if taken else "#1F2A3E"
+                        body_html += f"<td style='background-color:{bg};color:{color};text-align:center;padding:8px;'>{day}</td>"
+                body_html += "</tr>"
+            st.markdown(header_html + body_html + "</table>", unsafe_allow_html=True)
+    
+    # Вкладка "Рекомендации"
+    with tabs[2]:
+        st.subheader("Рекомендации по поддержанию здоровья")
+        recs = get_recommendations(pid)
+        if not recs:
+            st.info("Нет рекомендаций")
+        else:
+            for spec, text, date_str in recs:
+                st.markdown(f"""
+                <div class="recommendation-item">
+                    <strong>{spec}</strong> – {datetime.fromisoformat(date_str).strftime('%d.%m.%Y')}<br>
+                    {text}
+                </div>
+                """, unsafe_allow_html=True)
+    
+    # Вкладка "Заказ лекарств"
+    with tabs[3]:
+        st.subheader("Заказ всех назначенных препаратов")
+        pharmacies = ["Аптека №1 (Москва, ул. Ленина)", "Аптека №2 (Санкт-Петербург, Невский пр.)", "Аптека №3 (Казань, ул. Баумана)"]
+        selected_pharmacy = st.selectbox("Выберите аптеку", pharmacies)
+        if st.button("🛒 Заказать все препараты одним кликом"):
+            active_drugs = [p[1] for p in get_prescriptions_for_patient(pid, active_only=True)]
+            if active_drugs:
+                st.success(f"Заказ оформлен в {selected_pharmacy}. Препараты: {', '.join(active_drugs)}. Ожидайте уведомление о готовности.")
+            else:
+                st.warning("Нет активных назначений для заказа")
+        st.divider()
+        st.subheader("Проверка наличия выбранного препарата в аптеке")
+        drug_check = st.text_input("Название препарата")
+        if drug_check:
+            all_drugs = list(set([p[1] for p in get_prescriptions_for_patient(pid, active_only=False)]))
+            if drug_check in all_drugs:
+                st.success(f"Препарат '{drug_check}' есть в наличии в выбранной аптеке")
+            else:
+                st.warning(f"Препарат '{drug_check}' временно отсутствует или не назначен вам")
+    
+    render_footer()
+
 # ========================== ВХОД ==========================
 def login_page():
     st.markdown('<h1 style="text-align: center; color: #0A2F6C; margin-bottom: 3rem;">Цифровая история назначений</h1>', unsafe_allow_html=True)
@@ -1341,4 +1573,5 @@ else:
         else:
             doctor_dashboard()
     else:
-        st.markdown('<h1>Доступ как пациент</h1>', unsafe_allow_html=True)
+        # Пациентская зона
+        patient_dashboard()
