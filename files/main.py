@@ -11,6 +11,7 @@ from io import BytesIO
 import base64
 import random
 import numpy as np
+import qrcode   # <--- ДОБАВЛЕНО для генерации QR-кода
 
 # ========================== НАСТРОЙКА СТРАНИЦЫ ==========================
 st.set_page_config(page_title="Цифровая история назначений", page_icon="💊", layout="wide", initial_sidebar_state="expanded")
@@ -948,14 +949,14 @@ def patient_prescription_history():
     days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
     
     for day in days:
-        html_calendar += f'<td class="calendar-day-header">{day}</td>'
+        html_calendar += f'<td class="calendar-day-header">{day}<td>'
     html_calendar += '<tr><tr>'
     
     day_count = 0
     for week in calendar_data:
         for day in week:
             if day == 0:
-                html_calendar += '<td class="calendar-day"></td>'
+                html_calendar += '<td class="calendar-day"><td>'
             else:
                 date_str = f"{selected_year:04d}-{month_num:02d}-{day:02d}"
                 is_taken = date_str in intake_dates_set
@@ -967,7 +968,7 @@ def patient_prescription_history():
             
             day_count += 1
             if day_count % 7 == 0:
-                html_calendar += '<tr></tr>'
+                html_calendar += '<tr><tr>'
     
     html_calendar += '</table>'
     st.markdown(html_calendar, unsafe_allow_html=True)
@@ -2680,6 +2681,53 @@ def patient_dashboard():
                     <br><small>Сообщите об этом врачу при любом новом назначении.</small>
                 </div>
                 """, unsafe_allow_html=True)
+
+            # ========== ДОБАВЛЕННЫЙ БЛОК: QR-КОД И КОД ДЛЯ ФАРМАЦЕВТА ==========
+            today_str = date.today().isoformat()
+            code_seed = f"{pid}_{today_str}"
+            code_hash = hashlib.md5(code_seed.encode()).hexdigest()
+            daily_code = code_hash[:6].upper()          # Например, "A3F8B1"
+            qr_data = f"PatientCode:{daily_code}"       # Данные для QR
+
+            # Генерация QR-изображения в base64
+            try:
+                qr = qrcode.QRCode(box_size=4, border=2)
+                qr.add_data(qr_data)
+                qr.make(fit=True)
+                qr_img = qr.make_image(fill_color="#0A2F6C", back_color="white")
+                buffered = BytesIO()
+                qr_img.save(buffered, format="PNG")
+                qr_base64 = base64.b64encode(buffered.getvalue()).decode()
+                qr_html = f'<img src="data:image/png;base64,{qr_base64}" style="width: 140px; height: 140px;">'
+            except ImportError:
+                qr_html = '<div style="color: #DC3545;">⚠️ Библиотека qrcode не установлена</div>'
+            except Exception as e:
+                qr_html = f'<div style="color: #DC3545;">Ошибка: {e}</div>'
+
+            # Отображаем информационный блок с контрастной рамкой
+            st.markdown(f"""
+            <div style="background: #EFF6FF; border: 2px solid #0A2F6C; border-radius: 14px; 
+                        padding: 1.2rem; margin: 1.5rem 0 0.5rem 0; text-align: center;
+                        box-shadow: 0 2px 8px rgba(10,47,108,0.1);">
+                <div style="font-size: 1.2rem; font-weight: 700; color: #0A2F6C; margin-bottom: 0.5rem;">
+                    📱 Получение препаратов в аптеке
+                </div>
+                <div style="margin: 0.8rem 0; font-size: 1rem; line-height: 1.4;">
+                    Покажите QR‑код или назовите код 
+                    <strong style="font-size: 1.3rem; background: #FFFFFF; padding: 0.2rem 0.8rem; 
+                                 border-radius: 20px; letter-spacing: 1px;">{daily_code}</strong>
+                    <br>фармацевту, чтобы получить ваши лекарства.
+                </div>
+                <div style="display: flex; justify-content: center; margin: 0.5rem 0;">
+                    {qr_html}
+                </div>
+                <div style="margin-top: 0.5rem; font-size: 0.8rem; color: #4B5563;">
+                    🔄 Код обновляется каждую ночь в 00:00<br>
+                    Актуально на сегодня: <strong>{date.today().strftime('%d.%m.%Y')}</strong>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            # ========== КОНЕЦ ДОБАВЛЕННОГО БЛОКА ==========
         
         st.markdown('</div>', unsafe_allow_html=True)
     
