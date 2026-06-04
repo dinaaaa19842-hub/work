@@ -11,10 +11,10 @@ from io import BytesIO
 import base64
 import random
 import numpy as np
-import qrcode   # <--- ДОБАВЛЕНО для генерации QR-кода
+import qrcode # <--- ДОБАВЛЕНО для генерации QR-кода
 
 # ========================== НАСТРОЙКА СТРАНИЦЫ ==========================
-st.set_page_config(page_title="Цифровая история назначений", page_icon="💊", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Цифровая история назначений", page_icon="", layout="wide", initial_sidebar_state="expanded")
 
 # ========================== CSS СТИЛЬ ==========================
 st.markdown("""
@@ -1155,7 +1155,7 @@ def doctor_edit_patient():
             st.rerun()
     
     with col4:
-        if st.button("📊 Дашборд", use_container_width=True):
+        if st.button(" Дашборд", use_container_width=True):
             st.session_state['dashboard_patient_id'] = pid
             st.session_state['page'] = 'patient_dashboard_doctor'
             st.rerun()
@@ -1344,7 +1344,7 @@ def patient_dashboard_doctor():
     
     render_breadcrumb([f"Дашборд пациента: {full_name}"])
     
-    st.markdown(f'<div class="card"><div class="card-header">📊 Аналитический дашборд: {full_name}, {age} лет</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="card"><div class="card-header"> Аналитический дашборд: {full_name}, {age} лет</div>', unsafe_allow_html=True)
     
     if st.button("← Вернуться к редактированию"):
         st.session_state['page'] = 'doctor_edit'
@@ -1411,7 +1411,7 @@ def patient_dashboard_doctor():
     
     # ---- Вкладки дашборда ----
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "📈 Самочувствие", "💊 Приверженность", "📅 Расписание приёмов", "🔬 Сравнение препаратов", "📋 Сводка"
+        " Самочувствие", " Приверженность", " Расписание приёмов", " Сравнение препаратов", " Сводка"
     ])
     
     with tab1:
@@ -1460,7 +1460,7 @@ def patient_dashboard_doctor():
             
             col1, col2 = st.columns(2)
             with col1:
-                trend = "⬆️ Улучшение" if len(df_well_sorted) > 14 and df_well_sorted["score"].iloc[-7:].mean() > df_well_sorted["score"].iloc[:7].mean() else "➡️ Стабильно"
+                trend = "⬆ Улучшение" if len(df_well_sorted) > 14 and df_well_sorted["score"].iloc[-7:].mean() > df_well_sorted["score"].iloc[:7].mean() else " Стабильно"
                 st.info(f"**Тренд за период:** {trend}")
                 st.write(f"**Минимальная оценка:** {df_well_sorted['score'].min()}/10")
                 st.write(f"**Максимальная оценка:** {df_well_sorted['score'].max()}/10")
@@ -1560,7 +1560,7 @@ def patient_dashboard_doctor():
             if heatmap_data:
                 fig_heat = go.Figure(data=go.Heatmap(
                     z=heatmap_data,
-                    x=[d[5:] for d in date_range],  # только MM-DD
+                    x=[d[5:] for d in date_range], # только MM-DD
                     y=drug_names,
                     colorscale=[[0, "#F8D7DA"], [1, "#0A2F6C"]],
                     showscale=False,
@@ -1595,7 +1595,7 @@ def patient_dashboard_doctor():
                 schedule["День (12:00-18:00)"].append(f"{drug} {dosage}")
         
         cols = st.columns(4)
-        icons = {"Утро (06:00-12:00)": "🌅", "День (12:00-18:00)": "☀️", "Вечер (18:00-22:00)": "🌆", "Ночь (22:00-06:00)": "🌙"}
+        icons = {"Утро (06:00-12:00)": "", "День (12:00-18:00)": "", "Вечер (18:00-22:00)": "", "Ночь (22:00-06:00)": ""}
         
         for col, (time_slot, drugs) in zip(cols, schedule.items()):
             with col:
@@ -1604,7 +1604,7 @@ def patient_dashboard_doctor():
                     for d in drugs:
                         st.markdown(f"""
                         <div style="background:#EFF6FF;border-radius:6px;padding:0.5rem 0.8rem;margin-bottom:0.4rem;font-size:0.85rem;border-left:3px solid #3B82F6;">
-                            💊 {d}
+                             {d}
                         </div>
                         """, unsafe_allow_html=True)
                 else:
@@ -1694,16 +1694,16 @@ def patient_dashboard_doctor():
         col1, col2 = st.columns(2)
         with col1:
             st.markdown(f"""
-            **👤 Пациент:** {full_name}  
-            **🎂 Возраст:** {age} лет  
-            **📍 Город:** {patient[5] or '—'}  
-            **📋 Полис:** {patient[4] or '—'}  
+            ** Пациент:** {full_name} 
+            ** Возраст:** {age} лет 
+            ** Город:** {patient[5] or '—'} 
+            ** Полис:** {patient[4] or '—'} 
             """)
             
             if patient[6]:
                 st.markdown(f"""
                 <div style="background:#FFF0F0;border-left:3px solid #EF4444;padding:0.8rem;border-radius:4px;margin-top:0.5rem;">
-                    ⚠️ <strong>Противопоказания:</strong> {patient[6]}
+                     <strong>Противопоказания:</strong> {patient[6]}
                 </div>
                 """, unsafe_allow_html=True)
         
@@ -1713,7 +1713,7 @@ def patient_dashboard_doctor():
             
             adh_norm = adherence_pct / 10
             well_norm = avg_wellbeing
-            reg_norm = 8.5  # условно
+            reg_norm = 8.5 # условно
             stab_norm = 7.0
             act_norm = 6.5
             
@@ -1786,7 +1786,7 @@ def doctor_patients_page():
     with col_title:
         st.markdown('<h4 style="margin: 0 0 1rem 0;">Поиск по параметрам</h4>', unsafe_allow_html=True)
     with col_add_btn:
-        if st.button("➕ Добавить", use_container_width=True, key="add_patient_btn"):
+        if st.button(" Добавить", use_container_width=True, key="add_patient_btn"):
             st.session_state['page'] = 'add_patient'
             st.rerun()
 
@@ -1805,7 +1805,7 @@ def doctor_patients_page():
         patient_id_filter = st.text_input("", placeholder="No", key="search_id", label_visibility="collapsed")
     with col_search:
         st.markdown('<label class="search-label" style="opacity: 0;">.</label>', unsafe_allow_html=True)
-        search_button = st.button("🔍 Поиск", use_container_width=True, key="search_btn")
+        search_button = st.button(" Поиск", use_container_width=True, key="search_btn")
 
     st.divider()
 
@@ -1836,17 +1836,17 @@ def doctor_patients_page():
             cols[4].write(location)
             cols[5].write(drugs_short)
 
-            if cols[6].button("💬 Чат", key=f"chat_{pid}", use_container_width=True):
+            if cols[6].button(" Чат", key=f"chat_{pid}", use_container_width=True):
                 st.session_state['chat_patient_id'] = pid
                 st.session_state['page'] = 'doctor_chat'
                 st.rerun()
 
-            if cols[7].button("📊", key=f"dash_{pid}", use_container_width=True):
+            if cols[7].button("", key=f"dash_{pid}", use_container_width=True):
                 st.session_state['dashboard_patient_id'] = pid
                 st.session_state['page'] = 'patient_dashboard_doctor'
                 st.rerun()
 
-            if cols[8].button("✏️ Ред.", key=f"edit_{pid}", use_container_width=True):
+            if cols[8].button(" Ред.", key=f"edit_{pid}", use_container_width=True):
                 st.session_state['edit_patient_id'] = pid
                 st.session_state['page'] = 'doctor_edit'
                 st.rerun()
@@ -1883,7 +1883,7 @@ def drug_analytics_dashboard():
     all_patients = get_all_patients_full()
     
     # ---- Метрики верхнего уровня ----
-    st.subheader("📊 Основные показатели")
+    st.subheader(" Основные показатели")
     col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
         st.metric("Всего назначений", len(df), help="Общее число записей о назначениях")
@@ -1902,13 +1902,13 @@ def drug_analytics_dashboard():
     
     # ---- Вкладки ----
     tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
-        "🏆 Топ препаратов",
-        "👥 По возрасту",
-        "🌍 По городам",
+        " Топ препаратов",
+        " По возрасту",
+        " По городам",
         "⏰ Частота приёма",
-        "📈 Тренды",
-        "⚠️ Полипрагмазия",
-        "📋 Статистика"
+        " Тренды",
+        " Полипрагмазия",
+        " Статистика"
     ])
     
     with tab1:
@@ -1956,7 +1956,7 @@ def drug_analytics_dashboard():
         
         st.markdown(f"""
         <div style="background:#EFF6FF;border-left:4px solid #3B82F6;padding:1rem;border-radius:4px;">
-            💡 <strong>Вывод:</strong> Самый назначаемый препарат — <strong>{top_drugs.iloc[0]['Препарат']}</strong> 
+             <strong>Вывод:</strong> Самый назначаемый препарат — <strong>{top_drugs.iloc[0]['Препарат']}</strong> 
             ({top_drugs.iloc[0]['Назначений']} назначений). 
             Первые 3 препарата составляют {round(top_drugs.head(3)['Назначений'].sum()/len(df)*100, 1)}% всех назначений.
         </div>
@@ -2110,7 +2110,7 @@ def drug_analytics_dashboard():
         
         st.markdown(f"""
         <div style="background:#F0FFF4;border-left:4px solid #22C55E;padding:1rem;border-radius:4px;margin-top:1rem;">
-            💡 <strong>Вывод:</strong> {freq_counts.iloc[0]['Режим']} — наиболее популярный режим приёма 
+             <strong>Вывод:</strong> {freq_counts.iloc[0]['Режим']} — наиболее популярный режим приёма 
             ({round(freq_counts.iloc[0]['Назначений']/len(df)*100, 1)}% назначений).
             Одноразовые режимы улучшают приверженность пациентов.
         </div>
@@ -2235,7 +2235,7 @@ def drug_analytics_dashboard():
         high_risk_count = sum(1 for pat in all_patients if len(get_patient_by_id(pat[0])[1]) >= 7)
         st.markdown(f"""
         <div style="background:#FFF0F0;border-left:4px solid #EF4444;padding:1rem;border-radius:4px;margin-top:1rem;">
-            ⚠️ <strong>Внимание:</strong> {high_risk_count} пациентов принимают 7+ препаратов одновременно. 
+             <strong>Внимание:</strong> {high_risk_count} пациентов принимают 7+ препаратов одновременно. 
             Рекомендуется консультация клинического фармаколога.
         </div>
         """, unsafe_allow_html=True)
@@ -2348,9 +2348,9 @@ import json
 
 def get_ai_response(conversation_history, patient_info):
     """Получить ответ от ИИ ассистента"""
-    
+
     system_prompt = f"""Ты - медицинский ассистент пациента с дипломом кандидата наук по медицине.
-    
+
 Информация о пациенте:
 - Имя: {patient_info['name']}
 - Возраст: {patient_info['age']}
@@ -2358,39 +2358,65 @@ def get_ai_response(conversation_history, patient_info):
 - Противопоказания: {patient_info['contraindications'] or 'Нет информации'}
 
 ВАЖНЫЕ ПРАВИЛА:
-1. Отвечай доброжелательно и профессионально
-2. Помогай пациенту понимать назначенные ему препараты
-3. НЕ ставь диагнозы - это прерогатива врача
-4. НЕ рекомендуй препараты или их замены - говори "вам нужно обсудить с врачом"
-5. НЕ давай лишних медицинских советов - напоминай о консультации врача
-6. Спрашивай о самочувствии и его изменениях
-7. В каждом ответе подчеркивай: если нужен совет о лечении - обсуди с врачом
+1. Отвечай доброжелательно и профессионально на русском языке.
+2. Помогай пациенту понимать назначенные ему препараты.
+3. НЕ ставь диагнозы - это прерогатива врача.
+4. НЕ рекомендуй препараты или их замены - говори "вам нужно обсудить с врачом".
+5. НЕ давай лишних медицинских советов - напоминай о консультации врача.
+6. Спрашивай о самочувствии и его изменениях.
+7. В каждом ответе подчеркивай: если нужен совет о лечении - обсуди с врачом.
+8. Отвечай развернуто, объясняй назначения простым языком.
 
 Начни разговор с приветствия и предложи помощь."""
+
+    # Получаем API-ключ: сначала из secrets, потом из переменной окружения
+    api_key = ""
+    try:
+        api_key = st.secrets.get("ANTHROPIC_API_KEY", "")
+    except Exception:
+        pass
+    if not api_key:
+        import os
+        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+
+    if not api_key:
+        return ("Чтобы ИИ-ассистент работал, добавьте API-ключ Anthropic.\n\n"
+                "Создайте файл .streamlit/secrets.toml:\n"
+                "ANTHROPIC_API_KEY = \"ваш_ключ_с_console.anthropic.com\"")
 
     try:
         response = requests.post(
             "https://api.anthropic.com/v1/messages",
             headers={
                 "Content-Type": "application/json",
-                "x-api-key": st.secrets.get("ANTHROPIC_API_KEY", "")
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01"
             },
             json={
-                "model": "claude-opus-4-20250805",
-                "max_tokens": 500,
+                "model": "claude-opus-4-5",
+                "max_tokens": 800,
                 "system": system_prompt,
                 "messages": conversation_history
             },
-            timeout=10
+            timeout=30
         )
-        
+
         if response.status_code == 200:
             data = response.json()
             return data['content'][0]['text']
+        elif response.status_code == 401:
+            return "Ошибка авторизации: неверный API-ключ. Проверьте ANTHROPIC_API_KEY в secrets.toml."
+        elif response.status_code == 429:
+            return "Превышен лимит запросов. Подождите немного и попробуйте снова."
         else:
-            return "Извините, не смог получить ответ. Пожалуйста, попробуйте позже."
+            err = response.text[:300] if response.text else "нет деталей"
+            return f"Ошибка сервера ({response.status_code}): {err}"
+    except requests.exceptions.Timeout:
+        return "Время ожидания истекло. Сервер не ответил за 30 секунд. Попробуйте ещё раз."
+    except requests.exceptions.ConnectionError:
+        return "Нет подключения к интернету. Проверьте сетевое соединение."
     except Exception as e:
-        return f"Ошибка подключения: {str(e)}. Пожалуйста, проверьте интернет-соединение."
+        return f"Непредвиденная ошибка: {str(e)}"
 
 def ai_assistant_chat(pid, patient_data):
     """Интерфейс чата с ИИ ассистентом"""
@@ -2429,7 +2455,7 @@ def ai_assistant_chat(pid, patient_data):
     <div style="background: linear-gradient(135deg, #0A2F6C 0%, #1E3A8A 100%); color: white; 
                 padding: 1rem 1.5rem; display: flex; align-items: center; gap: 0.8rem;">
         <div style="width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.2); 
-                    display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">🤖</div>
+                    display: flex; align-items: center; justify-content: center; font-size: 1.5rem;"></div>
         <div>
             <div style="font-weight: 700; font-size: 0.95rem;">Медицинский Ассистент</div>
             <div style="font-size: 0.75rem; opacity: 0.8;">Всегда на помощь</div>
@@ -2453,7 +2479,7 @@ def ai_assistant_chat(pid, patient_data):
                 <div style="margin-bottom: 1rem; display: flex; gap: 0.8rem;">
                     <div style="width: 32px; height: 32px; border-radius: 50%; background: #0A2F6C; 
                                 color: white; display: flex; align-items: center; justify-content: center; 
-                                font-size: 0.9rem; flex-shrink: 0;">🤖</div>
+                                font-size: 0.9rem; flex-shrink: 0;"></div>
                     <div>
                         <div style="background: #E8EEF7; color: #1F2A3E; padding: 0.8rem 1rem; 
                                     border-radius: 12px 12px 12px 4px; max-width: 70%; font-size: 0.9rem; 
@@ -2483,7 +2509,7 @@ def ai_assistant_chat(pid, patient_data):
                         </div>
                         <div style="width: 32px; height: 32px; border-radius: 50%; background: #3B82F6; 
                                     color: white; display: flex; align-items: center; justify-content: center; 
-                                    font-size: 0.9rem; flex-shrink: 0;">👤</div>
+                                    font-size: 0.9rem; flex-shrink: 0;"></div>
                     </div>
                     """, unsafe_allow_html=True)
                 
@@ -2491,11 +2517,11 @@ def ai_assistant_chat(pid, patient_data):
                 with col1:
                     col_edit, col_del = st.columns(2)
                     with col_edit:
-                        if st.button("✏️", key=f"edit_msg_{i}", help="Редактировать"):
+                        if st.button("", key=f"edit_msg_{i}", help="Редактировать"):
                             st.session_state['editing_message'] = i
                             st.rerun()
                     with col_del:
-                        if st.button("🗑️", key=f"del_msg_{i}", help="Удалить"):
+                        if st.button("", key=f"del_msg_{i}", help="Удалить"):
                             chat_history.pop(i)
                             st.rerun()
         
@@ -2595,7 +2621,7 @@ def patient_dashboard():
     with st.sidebar:
         st.markdown("## Мой кабинет")
         
-        for tab in ["Мои препараты", "Расписание", "Рекомендации", "Заказ в аптеке", "Самочувствие", "🤖 Ассистент"]:
+        for tab in ["Мои препараты", "Расписание", "Рекомендации", "Заказ в аптеке", "Самочувствие", " Ассистент"]:
             if st.button(tab, key=f"p_sidebar_{tab}", use_container_width=True):
                 st.session_state['patient_tab'] = tab
                 st.rerun()
@@ -2612,7 +2638,7 @@ def patient_dashboard():
     # ВКЛ 1: МОИ ПРЕПАРАТЫ
     # ================================================================
     if patient_tab == "Мои препараты":
-        st.markdown('<div class="card"><div class="card-header">💊 Мои назначенные препараты</div>', unsafe_allow_html=True)
+        st.markdown('<div class="card"><div class="card-header"> Мои назначенные препараты</div>', unsafe_allow_html=True)
         
         if not prescriptions:
             st.info("Нет активных назначений")
@@ -2635,26 +2661,26 @@ def patient_dashboard():
                 
                 contra_warning = ""
                 if contraindications and any(word.lower() in drug_name.lower() for word in contraindications.split(",")):
-                    contra_warning = f'<div class="drug-contraindication">⚠️ Возможное взаимодействие с вашими противопоказаниями: {contraindications}</div>'
+                    contra_warning = f'<div class="drug-contraindication"> Возможное взаимодействие с вашими противопоказаниями: {contraindications}</div>'
                 
                 st.markdown(f"""
                 <div class="patient-drug-card">
                     <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-                        <div class="drug-name">💊 {drug_name}</div>
+                        <div class="drug-name"> {drug_name}</div>
                         {status_badge}
                     </div>
-                    <div class="drug-detail">📏 <b>Дозировка:</b> {dosage}</div>
-                    <div class="drug-detail">🔄 <b>Режим приёма:</b> {regularity}</div>
-                    <div class="drug-detail">🍽️ <b>Связь с едой:</b> {food_relation}</div>
-                    <div class="drug-detail">📅 <b>Период:</b> {start_date} — {end_date}</div>
+                    <div class="drug-detail"> <b>Дозировка:</b> {dosage}</div>
+                    <div class="drug-detail"> <b>Режим приёма:</b> {regularity}</div>
+                    <div class="drug-detail"> <b>Связь с едой:</b> {food_relation}</div>
+                    <div class="drug-detail"> <b>Период:</b> {start_date} — {end_date}</div>
                     <div class="drug-detail">🩺 <b>Причина назначения:</b> {indication}</div>
-                    <div class="drug-detail">📋 <b>Как принимать:</b> {instructions}</div>
-                    <div class="drug-detail">⚠️ <b>Особые указания:</b> {special_notes}</div>
+                    <div class="drug-detail"> <b>Как принимать:</b> {instructions}</div>
+                    <div class="drug-detail"> <b>Особые указания:</b> {special_notes}</div>
                     {contra_warning}
                 </div>
                 """, unsafe_allow_html=True)
                 
-                with st.expander(f"📖 Инструкция по применению: {drug_name}"):
+                with st.expander(f" Инструкция по применению: {drug_name}"):
                     st.markdown(f"""
                     **Название препарата:** {drug_name}
                     
@@ -2677,7 +2703,7 @@ def patient_dashboard():
             if contraindications:
                 st.markdown(f"""
                 <div style="background:#FFF0F0;border-left:4px solid #EF4444;padding:1rem;border-radius:6px;margin-top:1rem;">
-                    ⚠️ <strong>Ваши противопоказания и аллергии:</strong><br>{contraindications}
+                     <strong>Ваши противопоказания и аллергии:</strong><br>{contraindications}
                     <br><small>Сообщите об этом врачу при любом новом назначении.</small>
                 </div>
                 """, unsafe_allow_html=True)
@@ -2686,8 +2712,8 @@ def patient_dashboard():
             today_str = date.today().isoformat()
             code_seed = f"{pid}_{today_str}"
             code_hash = hashlib.md5(code_seed.encode()).hexdigest()
-            daily_code = code_hash[:6].upper()          # Например, "A3F8B1"
-            qr_data = f"PatientCode:{daily_code}"       # Данные для QR
+            daily_code = code_hash[:6].upper() # Например, "A3F8B1"
+            qr_data = f"PatientCode:{daily_code}" # Данные для QR
 
             # Генерация QR-изображения в base64
             try:
@@ -2700,7 +2726,7 @@ def patient_dashboard():
                 qr_base64 = base64.b64encode(buffered.getvalue()).decode()
                 qr_html = f'<img src="data:image/png;base64,{qr_base64}" style="width: 140px; height: 140px;">'
             except ImportError:
-                qr_html = '<div style="color: #DC3545;">⚠️ Библиотека qrcode не установлена</div>'
+                qr_html = '<div style="color: #DC3545;"> Библиотека qrcode не установлена</div>'
             except Exception as e:
                 qr_html = f'<div style="color: #DC3545;">Ошибка: {e}</div>'
 
@@ -2710,7 +2736,7 @@ def patient_dashboard():
                         padding: 1.2rem; margin: 1.5rem 0 0.5rem 0; text-align: center;
                         box-shadow: 0 2px 8px rgba(10,47,108,0.1);">
                 <div style="font-size: 1.2rem; font-weight: 700; color: #0A2F6C; margin-bottom: 0.5rem;">
-                    📱 Получение препаратов в аптеке
+                     Получение препаратов в аптеке
                 </div>
                 <div style="margin: 0.8rem 0; font-size: 1rem; line-height: 1.4;">
                     Покажите QR‑код или назовите код 
@@ -2722,7 +2748,7 @@ def patient_dashboard():
                     {qr_html}
                 </div>
                 <div style="margin-top: 0.5rem; font-size: 0.8rem; color: #4B5563;">
-                    🔄 Код обновляется каждую ночь в 00:00<br>
+                     Код обновляется каждую ночь в 00:00<br>
                     Актуально на сегодня: <strong>{date.today().strftime('%d.%m.%Y')}</strong>
                 </div>
             </div>
@@ -2744,9 +2770,9 @@ def patient_dashboard():
         
         if prescriptions:
             time_slots = [
-                ("🌅 Утро", "07:00", "#EFF6FF", "#3B82F6"),
-                ("☀️ День", "13:00", "#F0FFF4", "#22C55E"),
-                ("🌆 Вечер", "20:00", "#FFF7ED", "#F59E0B"),
+                (" Утро", "07:00", "#EFF6FF", "#3B82F6"),
+                (" День", "13:00", "#F0FFF4", "#22C55E"),
+                (" Вечер", "20:00", "#FFF7ED", "#F59E0B"),
             ]
             
             for slot_name, slot_time, bg, color in time_slots:
@@ -2774,18 +2800,18 @@ def patient_dashboard():
                         st.markdown(f"""
                         <div class="reminder-card {'done' if is_taken else ''}">
                             <strong>{slot_name} {slot_time}</strong> · {presc[1]} {presc[2]}
-                            {'<span style="color:#22C55E;font-weight:700;"> ✓ Принято</span>' if is_taken else ''}
+                            {'<span style="color:#22C55E;font-weight:700;"> Принято</span>' if is_taken else ''}
                         </div>
                         """, unsafe_allow_html=True)
                         
                         if not is_taken:
-                            if st.button(f"✅ Отметить приём: {presc[1]}", key=f"mark_{presc[0]}_{slot_name}"):
+                            if st.button(f" Отметить приём: {presc[1]}", key=f"mark_{presc[0]}_{slot_name}"):
                                 st.session_state[taken_key] = True
                                 st.rerun()
         
         st.divider()
         
-        st.subheader("📢 Настройка напоминаний")
+        st.subheader(" Настройка напоминаний")
         st.caption("Выберите удобный способ получения напоминаний")
         
         col1, col2, col3 = st.columns(3)
@@ -2804,7 +2830,7 @@ def patient_dashboard():
             if push: methods.append("Push")
             if sms: methods.append("SMS")
             if email: methods.append("E-mail")
-            st.success(f"✅ Напоминания включены: {', '.join(methods)}")
+            st.success(f" Напоминания включены: {', '.join(methods)}")
         
         st.markdown('</div>', unsafe_allow_html=True)
     
@@ -2812,7 +2838,7 @@ def patient_dashboard():
     # ВКЛ 3: РЕКОМЕНДАЦИИ ОТ ВРАЧЕЙ
     # ================================================================
     elif patient_tab == "Рекомендации":
-        st.markdown('<div class="card"><div class="card-header">📋 Рекомендации специалистов</div>', unsafe_allow_html=True)
+        st.markdown('<div class="card"><div class="card-header"> Рекомендации специалистов</div>', unsafe_allow_html=True)
         
         st.caption("Все рекомендации по поддержанию здоровья от разных специалистов — в одном окне")
         
@@ -2820,7 +2846,7 @@ def patient_dashboard():
         recommendations_demo = [
             {
                 "doctor": "Кардиолог",
-                "icon": "❤️",
+                "icon": "",
                 "date": "15 мая 2026",
                 "color": "#EFF6FF",
                 "border": "#3B82F6",
@@ -2834,7 +2860,7 @@ def patient_dashboard():
             },
             {
                 "doctor": "Эндокринолог",
-                "icon": "🔬",
+                "icon": "",
                 "date": "10 мая 2026",
                 "color": "#F0FFF4",
                 "border": "#22C55E",
@@ -2873,7 +2899,7 @@ def patient_dashboard():
         st.divider()
         
         # Сообщения от врача
-        st.subheader("💬 Сообщения от врача")
+        st.subheader(" Сообщения от врача")
         messages = get_messages(pid)
         if messages:
             for sender, msg, timestamp in messages[-5:]:
@@ -2901,7 +2927,7 @@ def patient_dashboard():
     # ВКЛ 4: ЗАКАЗ В АПТЕКЕ
     # ================================================================
     elif patient_tab == "Заказ в аптеке":
-        st.markdown('<div class="card"><div class="card-header">🏪 Заказ препаратов в аптеке</div>', unsafe_allow_html=True)
+        st.markdown('<div class="card"><div class="card-header"> Заказ препаратов в аптеке</div>', unsafe_allow_html=True)
         
         st.caption("Заказывайте все назначенные препараты в один клик")
         
@@ -2913,15 +2939,15 @@ def patient_dashboard():
                 is_active = datetime.strptime(presc[5], "%Y-%m-%d").date() >= date.today()
                 if is_active:
                     key = f"order_{presc[0]}"
-                    selected = st.checkbox(f"💊 {presc[1]} {presc[2]} — {presc[3]}", value=True, key=key)
+                    selected = st.checkbox(f" {presc[1]} {presc[2]} — {presc[3]}", value=True, key=key)
                     if selected:
                         total_items.append(presc[1])
             
             st.divider()
             
-            if st.button("🛒 Заказать все отмеченные в один клик", use_container_width=True):
+            if st.button(" Заказать все отмеченные в один клик", use_container_width=True):
                 if total_items:
-                    st.success(f"✅ Заказ оформлен: {', '.join(total_items)}")
+                    st.success(f" Заказ оформлен: {', '.join(total_items)}")
                     st.balloons()
                 else:
                     st.warning("Выберите хотя бы один препарат")
@@ -2929,7 +2955,7 @@ def patient_dashboard():
         st.divider()
         
         # Ближайшие аптеки
-        st.subheader("🗺️ Ближайшие аптеки")
+        st.subheader(" Ближайшие аптеки")
         
         pharmacies = [
             {"name": "Аптека 36.6", "address": "ул. Ленина, 15", "distance": "0.3 км", "status": "Открыто", "status_color": "#22C55E", "hours": "08:00 - 22:00"},
@@ -2968,7 +2994,7 @@ def patient_dashboard():
     # ВКЛ 5: САМОЧУВСТВИЕ
     # ================================================================
     elif patient_tab == "Самочувствие":
-        st.markdown('<div class="card"><div class="card-header">💙 Мое самочувствие</div>', unsafe_allow_html=True)
+        st.markdown('<div class="card"><div class="card-header"> Мое самочувствие</div>', unsafe_allow_html=True)
         
         st.subheader("Оценить самочувствие сегодня")
         
@@ -2978,12 +3004,12 @@ def patient_dashboard():
         with col1:
             score = st.slider("Как вы себя чувствуете? (1 = очень плохо, 10 = отлично)", 1, 10, 7)
         with col2:
-            emoji = "😄" if score >= 8 else "🙂" if score >= 6 else "😐" if score >= 4 else "😔"
+            emoji = "" if score >= 8 else "" if score >= 6 else "" if score >= 4 else ""
             st.markdown(f"<div style='font-size:3rem;text-align:center;padding-top:0.5rem;'>{emoji}</div>", unsafe_allow_html=True)
         
         note = st.text_area("Заметки (необязательно):", placeholder="Напишите, как прошёл день...", height=70)
         
-        if st.button("💾 Сохранить оценку"):
+        if st.button(" Сохранить оценку"):
             conn = sqlite3.connect(DB_NAME)
             c = conn.cursor()
             today_str = date.today().isoformat()
@@ -3035,7 +3061,7 @@ def patient_dashboard():
                 title="Самочувствие за последние 30 дней",
                 yaxis=dict(range=[0, 10.5], title="Оценка (1-10)",
                            tickvals=[1,2,3,4,5,6,7,8,9,10],
-                           ticktext=["1 😢","2","3","4 😐","5","6","7 🙂","8","9","10 😄"]),
+                           ticktext=["1 ","2","3","4 ","5","6","7 ","8","9","10 "]),
                 xaxis_title="Дата",
                 height=380,
                 hovermode="x unified",
@@ -3044,12 +3070,12 @@ def patient_dashboard():
             st.plotly_chart(fig, use_container_width=True)
             
             # Связь препараты — самочувствие
-            st.subheader("📊 Как препараты влияют на самочувствие")
+            st.subheader(" Как препараты влияют на самочувствие")
             st.caption("Примерный анализ: сравнение дней приёма и без приёма")
             
             if prescriptions:
                 correlation_data = []
-                for presc in prescriptions[:4]:  # Берём первые 4 для наглядности
+                for presc in prescriptions[:4]: # Берём первые 4 для наглядности
                     intake_dates_p = set(get_intake_dates_for_prescription(presc[0]))
                     
                     well_with = []
@@ -3100,7 +3126,7 @@ def patient_dashboard():
     # ================================================================
     # ВКЛ 6: ИИ АССИСТЕНТ
     # ================================================================
-    elif patient_tab == "🤖 Ассистент":
+    elif patient_tab == " Ассистент":
         st.markdown('<div class="card">', unsafe_allow_html=True)
         
         # Подготавливаем данные пациента для ассистента
