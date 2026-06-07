@@ -3194,4 +3194,17 @@ else:
             doctor_edit_patient()
         elif page == 'doctor_chat':
             doctor_chat_page()
-        elif page == 'add_patient'
+        elif page == 'add_patient':
+            add_patient_page()
+        elif page == 'prescription_history':
+            patient_prescription_history()
+        elif page == 'polypharmacy_analysis':
+            polypharmacy_analysis()
+        elif page == 'patient_dashboard_doctor':
+            patient_dashboard_doctor()
+        else:
+            doctor_dashboard()
+    elif role == 'patient':
+        patient_dashboard()
+    else:
+        st.markdown('<h1>Неизвестная роль</h1>', unsafe_allow_html=True)
