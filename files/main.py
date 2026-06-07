@@ -1465,7 +1465,7 @@ def patient_dashboard_doctor():
             
             col1, col2 = st.columns(2)
             with col1:
-                trend = "⬆ Улучшение" if len(df_well_sorted) > 14 and df_well_sorted["score"].iloc[-7:].mean() > df_well_sorted["score"].iloc[:7].mean() else " Стабильно"
+                trend = "+++ Улучшение" if len(df_well_sorted) > 14 and df_well_sorted["score"].iloc[-7:].mean() > df_well_sorted["score"].iloc[:7].mean() else "--- Стабильно"
                 st.info(f"**Тренд за период:** {trend}")
                 st.write(f"**Минимальная оценка:** {df_well_sorted['score'].min()}/10")
                 st.write(f"**Максимальная оценка:** {df_well_sorted['score'].max()}/10")
@@ -2354,25 +2354,23 @@ import json
 def get_ai_response(conversation_history, patient_info):
     """Получить ответ от ИИ ассистента через Groq API"""
 
-    system_prompt = f"""Ты - медицинский ассистент пациента с дипломом кандидата наук по медицине.
+    drugs_list = ', '.join([p[1] for p in patient_info['prescriptions']]) if patient_info['prescriptions'] else 'не указаны'
+    system_prompt = f"""Ты - медицинский ассистент. Отвечай на русском языке.
 
-Информация о пациенте:
+Данные пациента:
 - Имя: {patient_info['name']}
-- Возраст: {patient_info['age']}
-- Назначенные препараты: {', '.join([p[1] for p in patient_info['prescriptions']])}
-- Противопоказания: {patient_info['contraindications'] or 'Нет информации'}
+- Возраст: {patient_info['age']} лет
+- Назначенные препараты: {drugs_list}
+- Противопоказания: {patient_info['contraindications']}
 
-ВАЖНЫЕ ПРАВИЛА:
-1. Отвечай доброжелательно и профессионально на русском языке.
-2. Помогай пациенту понимать назначенные ему препараты.
-3. НЕ ставь диагнозы - это прерогатива врача.
-4. НЕ рекомендуй препараты или их замены - говори "вам нужно обсудить с врачом".
-5. НЕ давай лишних медицинских советов - напоминай о консультации врача.
-6. Спрашивай о самочувствии и его изменениях.
-7. В каждом ответе подчеркивай: если нужен совет о лечении - обсуди с врачом.
-8. Отвечай развернуто, объясняй назначения простым языком.
-
-Начни разговор с приветствия и предложи помощь."""
+ПРАВИЛА (строго соблюдай):
+1. Отвечай кратко: не более 80 слов.
+2. Используй 2-3 коротких абзаца или маркированный список.
+3. НЕ ставь диагнозы.
+4. НЕ рекомендуй препараты или их замены.
+5. Все вопросы о лечении: 'обсудите с вашим врачом'.
+6. Помогай понимать назначенные препараты простым языком.
+7. Никогда не упоминай учёные степени или квалификации."""
 
     # Получаем API-ключ: сначала из secrets, потом из переменной окружения
     api_key = ""
@@ -2431,20 +2429,39 @@ def get_ai_response(conversation_history, patient_info):
 def ai_assistant_chat(pid, patient_data):
     """Интерфейс чата с ИИ ассистентом"""
 
+    # Инициализация state
     if 'ai_chat_history' not in st.session_state:
         st.session_state['ai_chat_history'] = []
     if 'ai_greeting_sent' not in st.session_state:
         st.session_state['ai_greeting_sent'] = False
+    if 'ai_input_key' not in st.session_state:
+        st.session_state['ai_input_key'] = 0
 
     chat_history = st.session_state['ai_chat_history']
 
-    # Приветствие при первом входе — коротко
+    # ---- Шапка чата ----
+    st.markdown("""
+        <div style="background: linear-gradient(135deg, #0A2F6C, #1E3A8A); color: white;
+                    padding: 0.75rem 1.2rem; border-radius: 10px 10px 0 0;
+                    display: flex; align-items: center; gap: 0.8rem;">
+            <div style="width: 34px; height: 34px; border-radius: 50%;
+                        background: rgba(255,255,255,0.2);
+                        display: flex; align-items: center; justify-content: center;
+                        font-weight: 700; font-size: 0.8rem; color: white;">AI</div>
+            <div>
+                <div style="font-weight: 700; font-size: 0.9rem;">Медицинский ассистент</div>
+                <div style="font-size: 0.72rem; opacity: 0.8;">Отвечает на вопросы о препаратах</div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+
+    # ---- Приветствие при первом входе ----
     if not st.session_state['ai_greeting_sent'] and len(chat_history) == 0:
         with st.spinner("Ассистент печатает..."):
             greeting = get_ai_response(
                 [{"role": "user", "content": (
-                    "Привет! Представься одним предложением и задай один вопрос о самочувствии. "
-                    "Строго не более 2 предложений."
+                    "Приветствуй пациента двумя предложениями. "
+                    "Скажи только: 'Здравствуйте! Я ваш медицинский ассистент. Чем могу помочь?'"
                 )}],
                 patient_data
             )
@@ -2455,48 +2472,31 @@ def ai_assistant_chat(pid, patient_data):
         })
         st.session_state['ai_greeting_sent'] = True
 
-    # ---- Шапка чата ----
-    st.markdown("""
-        <div style="background: linear-gradient(135deg, #0A2F6C, #1E3A8A); color: white;
-                    padding: 0.75rem 1.2rem; border-radius: 10px 10px 0 0;
-                    display: flex; align-items: center; gap: 0.8rem;">
-            <div style="width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,0.2);
-                        display:flex;align-items:center;justify-content:center;
-                        font-weight:700;font-size:0.8rem;color:white;">AI</div>
-            <div>
-                <div style="font-weight:700;font-size:0.9rem;">Медицинский Ассистент</div>
-                <div style="font-size:0.72rem;opacity:0.8;">Отвечает на вопросы о препаратах</div>
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
-
-    # ---- Сообщения через st.chat_message (встроенный Streamlit-компонент) ----
+    # ---- Область сообщений (прокручиваемая) ----
     chat_area = st.container(height=420, border=True)
     with chat_area:
         for msg in chat_history:
             if msg["role"] == "assistant":
-                with st.chat_message("assistant", avatar="🏥"):
-                    # Разбиваем длинный текст на абзацы
-                    text = msg["content"]
-                    paragraphs = [p.strip() for p in text.split("\n") if p.strip()]
+                with st.chat_message("assistant"):
+                    paragraphs = [p.strip() for p in msg["content"].split("\n") if p.strip()]
                     for p in paragraphs:
                         st.markdown(p)
                     if msg.get("timestamp"):
                         st.caption(msg["timestamp"])
             else:
-                with st.chat_message("user", avatar="👤"):
+                with st.chat_message("user"):
                     st.markdown(msg["content"])
                     if msg.get("timestamp"):
                         st.caption(msg["timestamp"])
 
-    # ---- Поле ввода — фиксированное, не растягивается ----
+    # ---- Поле ввода + кнопки ----
     col_input, col_send, col_clear = st.columns([0.74, 0.16, 0.10])
     with col_input:
         user_input = st.text_input(
             "Вопрос",
             placeholder="Напишите вопрос о препаратах...",
             label_visibility="collapsed",
-            key="ai_chat_input"
+            key=f"ai_chat_input_{st.session_state['ai_input_key']}"
         )
     with col_send:
         send = st.button("Отправить", use_container_width=True, key="ai_send")
@@ -2504,23 +2504,22 @@ def ai_assistant_chat(pid, patient_data):
         if st.button("Сброс", use_container_width=True, key="ai_clear"):
             st.session_state['ai_chat_history'] = []
             st.session_state['ai_greeting_sent'] = False
+            st.session_state['ai_input_key'] = 0
             st.rerun()
 
     # ---- Обработка отправки ----
-    if send and user_input.strip():
+    if send and user_input and user_input.strip():
+        user_text = user_input.strip()
+
         chat_history.append({
             "role": "user",
-            "content": user_input,
+            "content": user_text,
             "timestamp": datetime.now().strftime("%H:%M")
         })
 
         api_history = [{"role": m["role"], "content": m["content"]} for m in chat_history]
-
-        # Жёсткое ограничение на длину ответа
         api_history[-1]["content"] += (
-            "\n\n[ВАЖНО: отвечай строго не более 80 слов. "
-            "Используй 2-3 коротких абзаца или маркированный список. "
-            "Никаких длинных объяснений.]"
+            "\n\n[Отвечай строго не более 80 слов. 2-3 абзаца или список. Никаких лишних слов.]"
         )
 
         with st.spinner("Ассистент печатает..."):
@@ -2532,6 +2531,8 @@ def ai_assistant_chat(pid, patient_data):
             "timestamp": datetime.now().strftime("%H:%M")
         })
 
+        # Очищаем поле ввода через смену ключа виджета
+        st.session_state['ai_input_key'] += 1
         st.rerun()
 
 
@@ -2565,7 +2566,7 @@ def patient_dashboard():
     with st.sidebar:
         st.markdown("## Мой кабинет")
         
-        for tab in ["Мои препараты", "Расписание", "Рекомендации", "Заказ в аптеке", "Самочувствие", " Ассистент"]:
+        for tab in ["Мои препараты", "Расписание", "Рекомендации", "Заказ в аптеке", "Самочувствие", "Полипрагмазия", " Ассистент"]:
             if st.button(tab, key=f"p_sidebar_{tab}", use_container_width=True):
                 st.session_state['patient_tab'] = tab
                 st.rerun()
@@ -3068,7 +3069,97 @@ def patient_dashboard():
         st.markdown('</div>', unsafe_allow_html=True)
     
     # ================================================================
-    # ВКЛ 6: ИИ АССИСТЕНТ
+    # ВКЛ 6: ПОЛИПРАГМАЗИЯ
+    # ================================================================
+    elif patient_tab == "Полипрагмазия":
+        st.markdown('<div class="card"><div class="card-header">Анализ полипрагмазии</div>', unsafe_allow_html=True)
+
+        result = analyze_polypharmacy(pid)
+        num_drugs = result['num_drugs']
+        risk_level = result['risk_level']
+        interactions = result['interactions']
+
+        risk_labels = {
+            'low':      ('Низкий',       '#28a745', '#d4edda'),
+            'medium':   ('Умеренный',    '#856404', '#fff3cd'),
+            'high':     ('Высокий',      '#721c24', '#f8d7da'),
+            'critical': ('Критический',  '#721c24', '#f5c6cb'),
+        }
+        label, text_color, bg_color = risk_labels.get(risk_level, ('Неизвестно', '#333', '#eee'))
+
+        risk_descriptions = {
+            'low':      'Количество препаратов в норме. Риск взаимодействия минимален.',
+            'medium':   'Отмечается повышенная нагрузка препаратами. Рекомендуется консультация врача.',
+            'high':     'Высокая полипрагмазия. Необходима проверка назначений врачом.',
+            'critical': 'Критическая полипрагмазия! Срочно обратитесь к лечащему врачу.',
+        }
+
+        col_a, col_b = st.columns(2)
+        with col_a:
+            st.markdown(f"""
+                <div style="background: #f8f9fa; border-radius: 10px; padding: 1.2rem;
+                            text-align: center; border: 1px solid #dee2e6;">
+                    <div style="font-size: 2.5rem; font-weight: 700;
+                                color: #0A2F6C;">{num_drugs}</div>
+                    <div style="font-size: 0.85rem; color: #666; margin-top: 0.3rem;">
+                        Назначенных препаратов
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+        with col_b:
+            st.markdown(f"""
+                <div style="background: {bg_color}; border-radius: 10px; padding: 1.2rem;
+                            text-align: center; border: 1px solid #dee2e6;">
+                    <div style="font-size: 1.3rem; font-weight: 700;
+                                color: {text_color};">{label}</div>
+                    <div style="font-size: 0.85rem; color: {text_color}; margin-top: 0.3rem;">
+                        Уровень риска
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown(f"""
+            <div style="margin-top: 1rem; padding: 0.9rem 1.2rem;
+                        background: {bg_color}; border-radius: 8px;
+                        color: {text_color}; font-size: 0.9rem;">
+                {risk_descriptions.get(risk_level, '')}
+            </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("<div style='margin-top: 1.5rem;'></div>", unsafe_allow_html=True)
+
+        if interactions:
+            st.markdown("**Выявленные взаимодействия препаратов:**")
+            sev_color = {'high': '#f8d7da', 'medium': '#fff3cd', 'low': '#d4edda'}
+            sev_label = {'high': 'Высокая степень', 'medium': 'Умеренная степень', 'low': 'Низкая степень'}
+            for ix in interactions:
+                bg = sev_color.get(ix['severity'], '#f0f0f0')
+                lbl = sev_label.get(ix['severity'], ix['severity'])
+                st.markdown(f"""
+                    <div style="background: {bg}; border-radius: 8px;
+                                padding: 0.7rem 1rem; margin-bottom: 0.6rem;
+                                font-size: 0.88rem;">
+                        <strong>{ix['drug1']}</strong> + <strong>{ix['drug2']}</strong>
+                        &nbsp;&mdash;&nbsp;<em>{lbl}</em><br>
+                        {ix['description']}
+                    </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.success("Взаимодействия между назначенными препаратами не выявлены.")
+
+        st.markdown("""
+            <div style="margin-top: 1.2rem; padding: 0.8rem 1rem;
+                        background: #e8f4fd; border-radius: 8px;
+                        font-size: 0.83rem; color: #0A2F6C;">
+                <strong>Внимание:</strong> данная страница носит информационный характер.
+                При любых опасениях обратитесь к лечащему врачу.
+            </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # ================================================================
+    # ВКЛ 7: ИИ АССИСТЕНТ
     # ================================================================
     elif patient_tab == " Ассистент":
         st.markdown('<div class="card">', unsafe_allow_html=True)
