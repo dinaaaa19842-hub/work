@@ -1,4 +1,4 @@
-import streamlit as st
+import streamlit as at
 import pandas as pd
 import sqlite3
 import plotly.graph_objects as go
@@ -2430,176 +2430,110 @@ def get_ai_response(conversation_history, patient_info):
 
 def ai_assistant_chat(pid, patient_data):
     """Интерфейс чата с ИИ ассистентом"""
-    
-    # Инициализируем историю чата
+
     if 'ai_chat_history' not in st.session_state:
         st.session_state['ai_chat_history'] = []
-    
     if 'ai_greeting_sent' not in st.session_state:
         st.session_state['ai_greeting_sent'] = False
-    
+
     chat_history = st.session_state['ai_chat_history']
-    
-    # Отправляем приветствие при первом входе
+
+    # Приветствие при первом входе — коротко
     if not st.session_state['ai_greeting_sent'] and len(chat_history) == 0:
-        with st.spinner("Ассистент думает..."):
+        with st.spinner("Ассистент печатает..."):
             greeting = get_ai_response(
-                [{"role": "user", "content": "Привет! Помоги мне разобраться с моими препаратами и здоровьем."}],
+                [{"role": "user", "content": (
+                    "Привет! Представься одним предложением и задай один вопрос о самочувствии. "
+                    "Строго не более 2 предложений."
+                )}],
                 patient_data
             )
         chat_history.append({
             "role": "assistant",
             "content": greeting,
-            "id": len(chat_history)
+            "timestamp": datetime.now().strftime("%H:%M")
         })
         st.session_state['ai_greeting_sent'] = True
-    
-    # Контейнер чата
+
+    # ---- Шапка чата ----
     st.markdown("""
-    <div style="background: #FFFFFF; border-radius: 12px; border: 1px solid #DCE5F0; 
-                box-shadow: 0 2px 8px rgba(10,47,108,0.08); overflow: hidden;">
-    """, unsafe_allow_html=True)
-    
-    # Header чата
-    st.markdown("""
-    <div style="background: linear-gradient(135deg, #0A2F6C 0%, #1E3A8A 100%); color: white; 
-                padding: 1rem 1.5rem; display: flex; align-items: center; gap: 0.8rem;">
-        <div style="width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.2); 
-                    display: flex; align-items: center; justify-content: center; font-size: 1.5rem;"></div>
-        <div>
-            <div style="font-weight: 700; font-size: 0.95rem;">Медицинский Ассистент</div>
-            <div style="font-size: 0.75rem; opacity: 0.8;">Всегда на помощь</div>
+        <div style="background: linear-gradient(135deg, #0A2F6C, #1E3A8A); color: white;
+                    padding: 0.75rem 1.2rem; border-radius: 10px 10px 0 0;
+                    display: flex; align-items: center; gap: 0.8rem;">
+            <div style="width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,0.2);
+                        display:flex;align-items:center;justify-content:center;
+                        font-weight:700;font-size:0.8rem;color:white;">AI</div>
+            <div>
+                <div style="font-weight:700;font-size:0.9rem;">Медицинский Ассистент</div>
+                <div style="font-size:0.72rem;opacity:0.8;">Отвечает на вопросы о препаратах</div>
+            </div>
         </div>
-    </div>
     """, unsafe_allow_html=True)
-    
-    # Область сообщений
-    chat_container = st.container(border=False)
-    
-    with chat_container:
-        st.markdown("""
-        <div style="background: #FAFBFC; padding: 1.5rem; min-height: 350px; max-height: 400px; 
-                    overflow-y: auto;">
-        """, unsafe_allow_html=True)
-        
-        # Выводим историю чата
-        for i, msg in enumerate(chat_history):
+
+    # ---- Сообщения через st.chat_message (встроенный Streamlit-компонент) ----
+    chat_area = st.container(height=420, border=True)
+    with chat_area:
+        for msg in chat_history:
             if msg["role"] == "assistant":
-                st.markdown(f"""
-                <div style="margin-bottom: 1rem; display: flex; gap: 0.8rem;">
-                    <div style="width: 32px; height: 32px; border-radius: 50%; background: #0A2F6C; 
-                                color: white; display: flex; align-items: center; justify-content: center; 
-                                font-size: 0.9rem; flex-shrink: 0;"></div>
-                    <div>
-                        <div style="background: #E8EEF7; color: #1F2A3E; padding: 0.8rem 1rem; 
-                                    border-radius: 12px 12px 12px 4px; max-width: 70%; font-size: 0.9rem; 
-                                    line-height: 1.4;">
-                            {msg['content']}
-                        </div>
-                        <div style="font-size: 0.7rem; color: #9CA3AF; margin-top: 0.3rem;">
-                            {msg.get('timestamp', '')}
-                        </div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
+                with st.chat_message("assistant", avatar="🏥"):
+                    # Разбиваем длинный текст на абзацы
+                    text = msg["content"]
+                    paragraphs = [p.strip() for p in text.split("\n") if p.strip()]
+                    for p in paragraphs:
+                        st.markdown(p)
+                    if msg.get("timestamp"):
+                        st.caption(msg["timestamp"])
             else:
-                col1, col2 = st.columns([0.15, 0.85])
-                with col2:
-                    st.markdown(f"""
-                    <div style="margin-bottom: 1rem; display: flex; justify-content: flex-end; gap: 0.8rem;">
-                        <div style="max-width: 70%;">
-                            <div style="background: #0A2F6C; color: white; padding: 0.8rem 1rem; 
-                                        border-radius: 12px 12px 4px 12px; font-size: 0.9rem; 
-                                        line-height: 1.4;">
-                                {msg['content']}
-                            </div>
-                            <div style="font-size: 0.7rem; color: #9CA3AF; margin-top: 0.3rem; text-align: right;">
-                                {msg.get('timestamp', '')}
-                            </div>
-                        </div>
-                        <div style="width: 32px; height: 32px; border-radius: 50%; background: #3B82F6; 
-                                    color: white; display: flex; align-items: center; justify-content: center; 
-                                    font-size: 0.9rem; flex-shrink: 0;"></div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                
-                # Кнопки редактирования
-                with col1:
-                    col_edit, col_del = st.columns(2)
-                    with col_edit:
-                        if st.button("", key=f"edit_msg_{i}", help="Редактировать"):
-                            st.session_state['editing_message'] = i
-                            st.rerun()
-                    with col_del:
-                        if st.button("", key=f"del_msg_{i}", help="Удалить"):
-                            chat_history.pop(i)
-                            st.rerun()
-        
-        st.markdown("</div>", unsafe_allow_html=True)
-    
-    # Разделитель
-    st.markdown("<hr style='margin: 0; border: none; border-top: 1px solid #DCE5F0;'>", unsafe_allow_html=True)
-    
-    # Input область
-    st.markdown("""
-    <div style="padding: 1rem 1.5rem; background: #FFFFFF; border-top: 1px solid #DCE5F0;">
-    """, unsafe_allow_html=True)
-    
-    col_input, col_send = st.columns([0.85, 0.15])
-    
+                with st.chat_message("user", avatar="👤"):
+                    st.markdown(msg["content"])
+                    if msg.get("timestamp"):
+                        st.caption(msg["timestamp"])
+
+    # ---- Поле ввода — фиксированное, не растягивается ----
+    col_input, col_send, col_clear = st.columns([0.74, 0.16, 0.10])
     with col_input:
         user_input = st.text_input(
-            "Ваше сообщение:",
-            placeholder="Напишите вопрос о препаратах или самочувствии...",
+            "Вопрос",
+            placeholder="Напишите вопрос о препаратах...",
             label_visibility="collapsed",
             key="ai_chat_input"
         )
-    
     with col_send:
-        if st.button("Отправить", use_container_width=True, key="ai_send"):
-            if user_input.strip():
-                # Добавляем сообщение пользователя
-                chat_history.append({
-                    "role": "user",
-                    "content": user_input,
-                    "timestamp": datetime.now().strftime("%H:%M"),
-                    "id": len(chat_history)
-                })
-                
-                # Подготавливаем историю для API
-                api_history = [
-                    {"role": msg["role"], "content": msg["content"]} 
-                    for msg in chat_history
-                ]
-                
-                # Получаем ответ от ИИ
-                with st.spinner("Ассистент думает..."):
-                    ai_response = get_ai_response(api_history, patient_data)
-                
-                # Добавляем ответ ассистента
-                chat_history.append({
-                    "role": "assistant",
-                    "content": ai_response,
-                    "timestamp": datetime.now().strftime("%H:%M"),
-                    "id": len(chat_history)
-                })
-                
-                # Сохраняем в БД если это о самочувствии
-                if any(word in user_input.lower() for word in ["самочувствие", "чувствую", "плохо", "хорошо", "болит"]):
-                    conn = sqlite3.connect(DB_NAME)
-                    c = conn.cursor()
-                    today_str = date.today().isoformat()
-                    # Пытаемся извлечь оценку из контекста
-                    c.execute("""
-                        INSERT OR IGNORE INTO wellbeing_log (patient_id, log_date, score, note) 
-                        VALUES (?, ?, ?, ?)
-                    """, (pid, today_str, 5, f"Из чата: {user_input[:100]}"))
-                    conn.commit()
-                    conn.close()
-                
-                st.rerun()
-    
-    st.markdown("</div></div>", unsafe_allow_html=True)
+        send = st.button("Отправить", use_container_width=True, key="ai_send")
+    with col_clear:
+        if st.button("Сброс", use_container_width=True, key="ai_clear"):
+            st.session_state['ai_chat_history'] = []
+            st.session_state['ai_greeting_sent'] = False
+            st.rerun()
+
+    # ---- Обработка отправки ----
+    if send and user_input.strip():
+        chat_history.append({
+            "role": "user",
+            "content": user_input,
+            "timestamp": datetime.now().strftime("%H:%M")
+        })
+
+        api_history = [{"role": m["role"], "content": m["content"]} for m in chat_history]
+
+        # Жёсткое ограничение на длину ответа
+        api_history[-1]["content"] += (
+            "\n\n[ВАЖНО: отвечай строго не более 80 слов. "
+            "Используй 2-3 коротких абзаца или маркированный список. "
+            "Никаких длинных объяснений.]"
+        )
+
+        with st.spinner("Ассистент печатает..."):
+            ai_response = get_ai_response(api_history, patient_data)
+
+        chat_history.append({
+            "role": "assistant",
+            "content": ai_response,
+            "timestamp": datetime.now().strftime("%H:%M")
+        })
+
+        st.rerun()
+
 
 # ========================== АВТОРИЗОВАННАЯ ЗОНА ПАЦИЕНТА ==========================
 def patient_dashboard():
