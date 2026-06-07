@@ -410,7 +410,12 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ========================== БД ==========================
-DB_NAME = "clinic.db"
+import os
+import tempfile
+
+# Streamlit Cloud: используем /tmp для записи БД
+_TMP_DIR = tempfile.gettempdir()
+DB_NAME = os.path.join(_TMP_DIR, "clinic.db")
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
