@@ -2584,7 +2584,49 @@ def patient_dashboard():
     # ================================================================
     if patient_tab == "Мои препараты":
         st.markdown('<div class="card"><div class="card-header"> Мои назначенные препараты</div>', unsafe_allow_html=True)
-        
+
+        # ========== QR-КОД И КОД ДЛЯ ФАРМАЦЕВТА (вверху вкладки) ==========
+        today_str_qr = date.today().isoformat()
+        code_seed_qr = f"{pid}_{today_str_qr}"
+        code_hash_qr = hashlib.md5(code_seed_qr.encode()).hexdigest()
+        daily_code_qr = code_hash_qr[:6].upper()
+        qr_data_qr = f"PatientCode:{daily_code_qr}"
+        try:
+            qr = qrcode.QRCode(box_size=4, border=2)
+            qr.add_data(qr_data_qr)
+            qr.make(fit=True)
+            qr_img = qr.make_image(fill_color="#0A2F6C", back_color="white")
+            buffered = BytesIO()
+            qr_img.save(buffered, format="PNG")
+            qr_base64 = base64.b64encode(buffered.getvalue()).decode()
+            qr_html_top = f'<img src="data:image/png;base64,{qr_base64}" style="width:130px;height:130px;">'
+        except Exception:
+            qr_html_top = '<div style="color:#DC3545;">QR недоступен</div>'
+
+        st.markdown(f"""
+        <div style="background:#EFF6FF;border:2px solid #0A2F6C;border-radius:14px;
+                    padding:1.2rem;margin-bottom:1.2rem;text-align:center;
+                    box-shadow:0 2px 8px rgba(10,47,108,0.1);">
+            <div style="font-size:1.1rem;font-weight:700;color:#0A2F6C;margin-bottom:0.5rem;">
+                Получение препаратов в аптеке
+            </div>
+            <div style="font-size:0.95rem;line-height:1.5;margin-bottom:0.7rem;">
+                Покажите QR-код или назовите код
+                <strong style="font-size:1.25rem;background:#FFFFFF;padding:0.15rem 0.7rem;
+                              border-radius:20px;letter-spacing:1px;">{daily_code_qr}</strong><br>
+                фармацевту, чтобы получить ваши лекарства.
+            </div>
+            <div style="display:flex;justify-content:center;margin:0.4rem 0;">
+                {qr_html_top}
+            </div>
+            <div style="font-size:0.8rem;color:#4B5563;margin-top:0.4rem;">
+                Код обновляется каждую ночь в 00:00<br>
+                Актуально на сегодня: <strong>{date.today().strftime('%d.%m.%Y')}</strong>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        # ========== КОНЕЦ QR-БЛОКА ==========
+
         if not prescriptions:
             st.info("Нет активных назначений")
         else:
@@ -2653,52 +2695,6 @@ def patient_dashboard():
                 </div>
                 """, unsafe_allow_html=True)
 
-            # ========== ДОБАВЛЕННЫЙ БЛОК: QR-КОД И КОД ДЛЯ ФАРМАЦЕВТА ==========
-            today_str = date.today().isoformat()
-            code_seed = f"{pid}_{today_str}"
-            code_hash = hashlib.md5(code_seed.encode()).hexdigest()
-            daily_code = code_hash[:6].upper() # Например, "A3F8B1"
-            qr_data = f"PatientCode:{daily_code}" # Данные для QR
-
-            # Генерация QR-изображения в base64
-            try:
-                qr = qrcode.QRCode(box_size=4, border=2)
-                qr.add_data(qr_data)
-                qr.make(fit=True)
-                qr_img = qr.make_image(fill_color="#0A2F6C", back_color="white")
-                buffered = BytesIO()
-                qr_img.save(buffered, format="PNG")
-                qr_base64 = base64.b64encode(buffered.getvalue()).decode()
-                qr_html = f'<img src="data:image/png;base64,{qr_base64}" style="width: 140px; height: 140px;">'
-            except ImportError:
-                qr_html = '<div style="color: #DC3545;"> Библиотека qrcode не установлена</div>'
-            except Exception as e:
-                qr_html = f'<div style="color: #DC3545;">Ошибка: {e}</div>'
-
-            # Отображаем информационный блок с контрастной рамкой
-            st.markdown(f"""
-            <div style="background: #EFF6FF; border: 2px solid #0A2F6C; border-radius: 14px; 
-                        padding: 1.2rem; margin: 1.5rem 0 0.5rem 0; text-align: center;
-                        box-shadow: 0 2px 8px rgba(10,47,108,0.1);">
-                <div style="font-size: 1.2rem; font-weight: 700; color: #0A2F6C; margin-bottom: 0.5rem;">
-                     Получение препаратов в аптеке
-                </div>
-                <div style="margin: 0.8rem 0; font-size: 1rem; line-height: 1.4;">
-                    Покажите QR‑код или назовите код 
-                    <strong style="font-size: 1.3rem; background: #FFFFFF; padding: 0.2rem 0.8rem; 
-                                 border-radius: 20px; letter-spacing: 1px;">{daily_code}</strong>
-                    <br>фармацевту, чтобы получить ваши лекарства.
-                </div>
-                <div style="display: flex; justify-content: center; margin: 0.5rem 0;">
-                    {qr_html}
-                </div>
-                <div style="margin-top: 0.5rem; font-size: 0.8rem; color: #4B5563;">
-                     Код обновляется каждую ночь в 00:00<br>
-                    Актуально на сегодня: <strong>{date.today().strftime('%d.%m.%Y')}</strong>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            # ========== КОНЕЦ ДОБАВЛЕННОГО БЛОКА ==========
         
         st.markdown('</div>', unsafe_allow_html=True)
     
@@ -2706,77 +2702,159 @@ def patient_dashboard():
     # ВКЛ 2: РАСПИСАНИЕ / НАПОМИНАНИЯ
     # ================================================================
     elif patient_tab == "Расписание":
-        st.markdown('<div class="card"><div class="card-header">⏰ Расписание приёма и напоминания</div>', unsafe_allow_html=True)
-        
-        today_str = date.today().strftime("%d %B %Y")
-        st.markdown(f"**Сегодня:** {today_str}")
-        
-        st.subheader("Сегодняшний план приёма")
-        
+        st.markdown('<div class="card"><div class="card-header">Расписание приёма препаратов</div>', unsafe_allow_html=True)
+
+        # ---- Навигация по дням недели ----
+        today = date.today()
+        # Определяем начало текущей недели (Пн)
+        week_start = today - timedelta(days=today.weekday())
+        week_days = [week_start + timedelta(days=i) for i in range(7)]
+        day_names_short = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+
+        if 'sched_selected_day' not in st.session_state:
+            st.session_state['sched_selected_day'] = today.isoformat()
+        selected_day = date.fromisoformat(st.session_state['sched_selected_day'])
+
+        # Полоса навигации по дням
+        nav_cols = st.columns(9)
+        with nav_cols[0]:
+            if st.button("<", key="sched_prev"):
+                prev_week = selected_day - timedelta(days=7)
+                st.session_state['sched_selected_day'] = prev_week.isoformat()
+                st.rerun()
+        for i, d in enumerate(week_days):
+            with nav_cols[i + 1]:
+                is_today = (d == today)
+                is_selected = (d == selected_day)
+                btn_label = f"{day_names_short[i]}\n{d.day}"
+                if is_selected:
+                    st.markdown(f"""
+                        <div style="background:#0A2F6C;color:white;border-radius:10px;
+                                    padding:0.35rem 0.1rem;text-align:center;
+                                    font-size:0.78rem;font-weight:700;cursor:default;">
+                            {day_names_short[i]}<br>{d.day}
+                        </div>""", unsafe_allow_html=True)
+                else:
+                    label_style = "font-weight:700;color:#0A2F6C;" if is_today else "color:#374151;"
+                    if st.button(f"{day_names_short[i]}\n{d.day}", key=f"sched_day_{d.isoformat()}",
+                                 use_container_width=True):
+                        st.session_state['sched_selected_day'] = d.isoformat()
+                        st.rerun()
+        with nav_cols[8]:
+            if st.button(">", key="sched_next"):
+                next_week = selected_day + timedelta(days=7)
+                st.session_state['sched_selected_day'] = next_week.isoformat()
+                st.rerun()
+
+        # Подпись дня
+        month_ru = ["января","февраля","марта","апреля","мая","июня",
+                     "июля","августа","сентября","октября","ноября","декабря"]
+        day_label = f"Сегодня, {selected_day.day} {month_ru[selected_day.month - 1]}" if selected_day == today \
+                    else f"{selected_day.day} {month_ru[selected_day.month - 1]} {selected_day.year}"
+        st.markdown(f"<div style='margin:0.6rem 0 0.3rem 0;font-size:0.95rem;color:#6B7280;'>{day_label}</div>",
+                    unsafe_allow_html=True)
+
+        st.divider()
+
+        # ---- Слоты приёма ----
         if prescriptions:
             time_slots = [
-                (" Утро", "07:00", "#EFF6FF", "#3B82F6"),
-                (" День", "13:00", "#F0FFF4", "#22C55E"),
-                (" Вечер", "20:00", "#FFF7ED", "#F59E0B"),
+                ("Утро", "08:00"),
+                ("День",  "13:00"),
+                ("Вечер", "20:00"),
             ]
-            
-            for slot_name, slot_time, bg, color in time_slots:
+
+            any_shown = False
+            for slot_name, slot_time in time_slots:
                 slot_drugs = []
                 for presc in prescriptions:
-                    reg = presc[3]
-                    instructions = presc[7] if len(presc) > 7 else ""
-                    
-                    is_morning = "утром" in str(instructions).lower() or "1 раз" in reg
-                    is_evening = "вечером" in str(instructions).lower() or "2 раза" in reg
-                    is_day = "3 раза" in reg
-                    
-                    if "Утро" in slot_name and is_morning:
+                    reg = presc[3].lower()
+                    instr = (presc[7] if len(presc) > 7 else "").lower()
+                    start_d = datetime.strptime(presc[4], "%Y-%m-%d").date()
+                    end_d   = datetime.strptime(presc[5], "%Y-%m-%d").date()
+                    in_range = start_d <= selected_day <= end_d
+                    if not in_range:
+                        continue
+                    if slot_name == "Утро" and ("утро" in instr or "1 раз" in reg or "08:00" in reg):
                         slot_drugs.append(presc)
-                    elif "Вечер" in slot_name and is_evening:
+                    elif slot_name == "День" and ("днем" in instr or "3 раза" in reg or "13:00" in reg):
                         slot_drugs.append(presc)
-                    elif "День" in slot_name and is_day:
+                    elif slot_name == "Вечер" and ("вечер" in instr or "2 раза" in reg or "20:00" in reg):
                         slot_drugs.append(presc)
-                
-                if slot_drugs:
-                    for presc in slot_drugs:
-                        taken_key = f"taken_{presc[0]}_{slot_name}"
-                        is_taken = st.session_state.get(taken_key, False)
-                        
-                        st.markdown(f"""
-                        <div class="reminder-card {'done' if is_taken else ''}">
-                            <strong>{slot_name} {slot_time}</strong> · {presc[1]} {presc[2]}
-                            {'<span style="color:#22C55E;font-weight:700;"> Принято</span>' if is_taken else ''}
-                        </div>
-                        """, unsafe_allow_html=True)
-                        
-                        if not is_taken:
-                            if st.button(f" Отметить приём: {presc[1]}", key=f"mark_{presc[0]}_{slot_name}"):
-                                st.session_state[taken_key] = True
-                                st.rerun()
-        
+
+                if not slot_drugs:
+                    continue
+                any_shown = True
+
+                # Шапка слота
+                st.markdown(f"""
+                    <div style="background:#F8FAFC;border-radius:10px;padding:0.5rem 1rem;
+                                margin-bottom:0.4rem;border-left:4px solid #0A2F6C;">
+                        <strong style="color:#0A2F6C;font-size:0.95rem;">{slot_time}</strong>
+                        &nbsp;<span style="color:#6B7280;font-size:0.85rem;">{slot_name}</span>
+                    </div>
+                """, unsafe_allow_html=True)
+
+                for presc in slot_drugs:
+                    taken_key = f"taken_{presc[0]}_{slot_name}_{selected_day.isoformat()}"
+                    is_taken = st.session_state.get(taken_key, False)
+
+                    food_rel = presc[8] if len(presc) > 8 else ""
+                    indication = presc[6] if len(presc) > 6 else ""
+                    special = presc[9] if len(presc) > 9 else ""
+
+                    food_hint = f"{food_rel}" if food_rel and food_rel != "—" else ""
+
+                    taken_badge = "<span style='color:#22C55E;font-weight:600;margin-left:0.5rem;'>\u2713 Принято</span>" if is_taken else ""
+
+                    with st.expander(f"{presc[1]} {presc[2]}{taken_badge}", expanded=False):
+                        col_info, col_btn = st.columns([0.75, 0.25])
+                        with col_info:
+                            if food_hint:
+                                st.markdown(f"**Связь с едой:** {food_hint}")
+                            if indication and indication != "—":
+                                st.markdown(f"**Причина назначения:** {indication}")
+                            if special and special != "—":
+                                st.markdown(f"**Особые указания:** {special}")
+                            st.caption(f"График: {presc[4]} — {presc[5]}")
+                        with col_btn:
+                            if not is_taken:
+                                if st.button("Принято", key=f"mark_{presc[0]}_{slot_name}_{selected_day.isoformat()}",
+                                             use_container_width=True):
+                                    st.session_state[taken_key] = True
+                                    st.rerun()
+                            else:
+                                if st.button("Отменить", key=f"unmark_{presc[0]}_{slot_name}_{selected_day.isoformat()}",
+                                             use_container_width=True):
+                                    st.session_state[taken_key] = False
+                                    st.rerun()
+
+            if not any_shown:
+                st.info("На этот день приёмов не запланировано")
+        else:
+            st.info("Нет активных назначений")
+
         st.divider()
-        
-        st.subheader(" Настройка напоминаний")
-        st.caption("Выберите удобный способ получения напоминаний")
-        
+
+        # ---- Напоминания ----
+        st.markdown("**Настройка напоминаний**")
         col1, col2, col3 = st.columns(3)
         with col1:
-            push = st.toggle("Push-уведомления", value=True)
-            st.caption("Уведомления на устройство")
+            push = st.toggle("Push", value=True)
+            st.caption("На устройство")
         with col2:
             sms = st.toggle("SMS", value=False)
-            st.caption("Сообщения на телефон")
+            st.caption("На телефон")
         with col3:
-            email = st.toggle("E-mail", value=False)
-            st.caption("На электронную почту")
-        
-        if push or sms or email:
+            email_tog = st.toggle("E-mail", value=False)
+            st.caption("На почту")
+        if push or sms or email_tog:
             methods = []
             if push: methods.append("Push")
             if sms: methods.append("SMS")
-            if email: methods.append("E-mail")
-            st.success(f" Напоминания включены: {', '.join(methods)}")
-        
+            if email_tog: methods.append("E-mail")
+            st.success(f"Напоминания включены: {', '.join(methods)}")
+
         st.markdown('</div>', unsafe_allow_html=True)
     
     # ================================================================
@@ -2898,26 +2976,66 @@ def patient_dashboard():
                     st.warning("Выберите хотя бы один препарат")
         
         st.divider()
-        
-        # Ближайшие аптеки
-        st.subheader(" Ближайшие аптеки")
-        
+
+        # ---- Ближайшие аптеки ----
+        st.subheader("Ближайшие аптеки")
+
         pharmacies = [
-            {"name": "Аптека 36.6", "address": "ул. Ленина, 15", "distance": "0.3 км", "status": "Открыто", "status_color": "#22C55E", "hours": "08:00 - 22:00"},
-            {"name": "Горздрав", "address": "пр. Мира, 42", "distance": "0.7 км", "status": "Открыто", "status_color": "#22C55E", "hours": "09:00 - 21:00"},
-            {"name": "Ригла", "address": "ул. Садовая, 8", "distance": "1.2 км", "status": "Закрыто", "status_color": "#EF4444", "hours": "10:00 - 20:00"},
-            {"name": "Самсон-Фарма", "address": "ул. Победы, 31", "distance": "1.8 км", "status": "Открыто", "status_color": "#22C55E", "hours": "08:00 - 00:00"},
+            {"name": "Аптека 36.6",    "address": "ул. Ленина, 15",   "distance": "0.3 км",
+             "status": "Открыто",  "hours": "08:00 - 22:00", "lat": 55.7558,  "lon": 37.6173},
+            {"name": "Горздрав",      "address": "пр. Мира, 42",     "distance": "0.7 км",
+             "status": "Открыто",  "hours": "09:00 - 21:00", "lat": 55.7580,  "lon": 37.6210},
+            {"name": "Ригла",          "address": "ул. Садовая, 8",   "distance": "1.2 км",
+             "status": "Закрыто",  "hours": "10:00 - 20:00", "lat": 55.7530,  "lon": 37.6145},
+            {"name": "Самсон-Фарма", "address": "ул. Победы, 31",  "distance": "1.8 км",
+             "status": "Открыто",  "hours": "08:00 - 00:00", "lat": 55.7610,  "lon": 37.6250},
         ]
-        
+
+        # ---- Карта ----
+        try:
+            import folium
+            from streamlit_folium import st_folium
+
+            map_center = [55.7570, 37.6190]
+            ph_map = folium.Map(location=map_center, zoom_start=14,
+                                tiles="OpenStreetMap", prefer_canvas=True)
+
+            for ph in pharmacies:
+                color = "green" if ph["status"] == "Открыто" else "red"
+                popup_html = f"""
+                    <div style="font-family:sans-serif;min-width:180px;">
+                        <strong style="font-size:1rem;">{ph['name']}</strong><br>
+                        <span style="color:#6B7280;font-size:0.85rem;">{ph['address']}</span><br>
+                        <span style="color:{'#22C55E' if ph['status'] == 'Открыто' else '#EF4444'};
+                              font-weight:600;">{ph['status']}</span>
+                        &nbsp;&bull;&nbsp;работает: {ph['hours']}<br>
+                        <span style="color:#0A2F6C;font-weight:600;">{ph['distance']} от вас</span>
+                    </div>
+                """
+                folium.Marker(
+                    location=[ph["lat"], ph["lon"]],
+                    popup=folium.Popup(popup_html, max_width=250),
+                    tooltip=ph["name"],
+                    icon=folium.Icon(color=color, icon="plus-sign", prefix="glyphicon")
+                ).add_to(ph_map)
+
+            st_folium(ph_map, height=380, use_container_width=True)
+        except ImportError:
+            st.info("Карта недоступна. Добавьте folium и streamlit-folium в requirements.txt")
+
+        st.markdown("<div style='margin-top:1rem;'></div>", unsafe_allow_html=True)
+
+        # ---- Карточки аптек ----
         for ph in pharmacies:
+            status_color = "#22C55E" if ph["status"] == "Открыто" else "#EF4444"
             st.markdown(f"""
             <div class="pharmacy-card">
                 <div style="display:flex;justify-content:space-between;align-items:center;">
                     <div>
-                        <strong>{ph['name']}</strong> &nbsp;
-                        <span style="color:{ph['status_color']};font-size:0.8rem;font-weight:600;">{ph['status']}</span><br>
+                        <strong>{ph['name']}</strong>&nbsp;
+                        <span style="color:{status_color};font-size:0.8rem;font-weight:600;">{ph['status']}</span><br>
                         <span style="color:#6B7280;font-size:0.85rem;">{ph['address']}</span><br>
-                        <span style="color:#9CA3AF;font-size:0.82rem;">⏰ {ph['hours']}</span>
+                        <span style="color:#9CA3AF;font-size:0.82rem;">Работает: {ph['hours']}</span>
                     </div>
                     <div style="text-align:right;">
                         <div style="font-size:1.1rem;font-weight:700;color:#0A2F6C;">{ph['distance']}</div>
@@ -2926,13 +3044,12 @@ def patient_dashboard():
                 </div>
             </div>
             """, unsafe_allow_html=True)
-            
             col1, col2 = st.columns(2)
             with col1:
-                st.button(f"Проверить наличие", key=f"check_{ph['name']}", use_container_width=True)
+                st.button("Проверить наличие", key=f"check_{ph['name']}", use_container_width=True)
             with col2:
-                st.button(f"Заказать здесь", key=f"order_ph_{ph['name']}", use_container_width=True)
-        
+                st.button("Заказать здесь", key=f"order_ph_{ph['name']}", use_container_width=True)
+
         st.markdown('</div>', unsafe_allow_html=True)
     
     # ================================================================
