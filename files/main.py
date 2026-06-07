@@ -14,7 +14,7 @@ import numpy as np
 import qrcode # <--- ДОБАВЛЕНО для генерации QR-кода
 
 # ========================== НАСТРОЙКА СТРАНИЦЫ ==========================
-st.set_page_config(page_title="Цифровая история назначений", page_icon="", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Цифровая история назначений", page_icon=None, layout="wide", initial_sidebar_state="expanded")
 
 # ========================== CSS СТИЛЬ ==========================
 st.markdown("""
@@ -2347,7 +2347,7 @@ import requests
 import json
 
 def get_ai_response(conversation_history, patient_info):
-    """Получить ответ от ИИ ассистента"""
+    """Получить ответ от ИИ ассистента через Groq API"""
 
     system_prompt = f"""Ты - медицинский ассистент пациента с дипломом кандидата наук по медицине.
 
@@ -2372,42 +2372,47 @@ def get_ai_response(conversation_history, patient_info):
     # Получаем API-ключ: сначала из secrets, потом из переменной окружения
     api_key = ""
     try:
-        api_key = st.secrets.get("ANTHROPIC_API_KEY", "")
+        api_key = st.secrets.get("GROQ_API_KEY", "")
     except Exception:
         pass
     if not api_key:
         import os
-        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        api_key = os.environ.get("GROQ_API_KEY", "")
 
     if not api_key:
-        return ("Чтобы ИИ-ассистент работал, добавьте API-ключ Anthropic.\n\n"
+        return ("Для работы ИИ-ассистента укажите API-ключ Groq.\n\n"
                 "Создайте файл .streamlit/secrets.toml:\n"
-                "ANTHROPIC_API_KEY = \"ваш_ключ_с_console.anthropic.com\"")
+                'GROQ_API_KEY = "gsk_...ваш_ключ..."')
+
+    # Формируем историю: system идёт отдельным сообщением для Groq
+    messages = [{"role": "system", "content": system_prompt}] + [
+        {"role": msg["role"], "content": msg["content"]}
+        for msg in conversation_history
+    ]
 
     try:
         response = requests.post(
-            "https://api.anthropic.com/v1/messages",
+            "https://api.groq.com/openai/v1/chat/completions",
             headers={
                 "Content-Type": "application/json",
-                "x-api-key": api_key,
-                "anthropic-version": "2023-06-01"
+                "Authorization": f"Bearer {api_key}"
             },
             json={
-                "model": "claude-opus-4-5",
+                "model": "llama-3.3-70b-versatile",
+                "messages": messages,
                 "max_tokens": 800,
-                "system": system_prompt,
-                "messages": conversation_history
+                "temperature": 0.7
             },
             timeout=30
         )
 
         if response.status_code == 200:
             data = response.json()
-            return data['content'][0]['text']
+            return data['choices'][0]['message']['content']
         elif response.status_code == 401:
-            return "Ошибка авторизации: неверный API-ключ. Проверьте ANTHROPIC_API_KEY в secrets.toml."
+            return "Ошибка авторизации: неверный API-ключ Groq. Проверьте GROQ_API_KEY в secrets.toml."
         elif response.status_code == 429:
-            return "Превышен лимит запросов. Подождите немного и попробуйте снова."
+            return "Превышен лимит запросов Groq. Подождите немного и попробуйте снова."
         else:
             err = response.text[:300] if response.text else "нет деталей"
             return f"Ошибка сервера ({response.status_code}): {err}"
@@ -3189,17 +3194,4 @@ else:
             doctor_edit_patient()
         elif page == 'doctor_chat':
             doctor_chat_page()
-        elif page == 'add_patient':
-            add_patient_page()
-        elif page == 'prescription_history':
-            patient_prescription_history()
-        elif page == 'polypharmacy_analysis':
-            polypharmacy_analysis()
-        elif page == 'patient_dashboard_doctor':
-            patient_dashboard_doctor()
-        else:
-            doctor_dashboard()
-    elif role == 'patient':
-        patient_dashboard()
-    else:
-        st.markdown('<h1>Неизвестная роль</h1>', unsafe_allow_html=True)
+        elif page == 'add_patient'
