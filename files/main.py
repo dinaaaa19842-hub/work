@@ -2803,31 +2803,44 @@ def patient_dashboard():
                     indication = presc[6] if len(presc) > 6 else ""
                     special = presc[9] if len(presc) > 9 else ""
 
-                    food_hint = f"{food_rel}" if food_rel and food_rel != "—" else ""
+                    # Карточка препарата
+                    status_bg   = "#EEFBF3" if is_taken else "#FFFFFF"
+                    status_bord = "#22C55E" if is_taken else "#E2E8F0"
+                    status_txt  = "Принято" if is_taken else "Не принято"
+                    status_col  = "#22C55E" if is_taken else "#9CA3AF"
 
-                    taken_badge = "<span style='color:#22C55E;font-weight:600;margin-left:0.5rem;'>\u2713 Принято</span>" if is_taken else ""
-
-                    with st.expander(f"{presc[1]} {presc[2]}{taken_badge}", expanded=False):
-                        col_info, col_btn = st.columns([0.75, 0.25])
-                        with col_info:
-                            if food_hint:
-                                st.markdown(f"**Связь с едой:** {food_hint}")
-                            if indication and indication != "—":
-                                st.markdown(f"**Причина назначения:** {indication}")
-                            if special and special != "—":
-                                st.markdown(f"**Особые указания:** {special}")
-                            st.caption(f"График: {presc[4]} — {presc[5]}")
-                        with col_btn:
-                            if not is_taken:
-                                if st.button("Принято", key=f"mark_{presc[0]}_{slot_name}_{selected_day.isoformat()}",
-                                             use_container_width=True):
-                                    st.session_state[taken_key] = True
-                                    st.rerun()
-                            else:
-                                if st.button("Отменить", key=f"unmark_{presc[0]}_{slot_name}_{selected_day.isoformat()}",
-                                             use_container_width=True):
-                                    st.session_state[taken_key] = False
-                                    st.rerun()
+                    col_card, col_action = st.columns([0.78, 0.22])
+                    with col_card:
+                        st.markdown(f"""
+                        <div style="background:{status_bg};border:1.5px solid {status_bord};
+                                    border-radius:10px;padding:0.65rem 1rem;
+                                    margin-bottom:0.15rem;">
+                            <div style="font-weight:600;font-size:0.92rem;color:#1E293B;">
+                                {presc[1]} <span style="font-weight:400;color:#6B7280;font-size:0.85rem;">{presc[2]}</span>
+                            </div>
+                            <div style="font-size:0.8rem;color:{status_col};font-weight:600;margin-top:0.15rem;">{status_txt}</div>
+                            {f'<div style="font-size:0.78rem;color:#64748B;margin-top:0.2rem;">Связь с едой: {food_rel}</div>' if food_rel and food_rel != "—" else ''}
+                            {f'<div style="font-size:0.78rem;color:#64748B;">Назначен: {indication}</div>' if indication and indication != "—" else ''}
+                        </div>
+                        """, unsafe_allow_html=True)
+                    with col_action:
+                        if not is_taken:
+                            if st.button(
+                                "Принял(а)",
+                                key=f"mark_{presc[0]}_{slot_name}_{selected_day.isoformat()}",
+                                use_container_width=True,
+                                type="primary"
+                            ):
+                                st.session_state[taken_key] = True
+                                st.rerun()
+                        else:
+                            if st.button(
+                                "Отменить",
+                                key=f"unmark_{presc[0]}_{slot_name}_{selected_day.isoformat()}",
+                                use_container_width=True
+                            ):
+                                st.session_state[taken_key] = False
+                                st.rerun()
 
             if not any_shown:
                 st.info("На этот день приёмов не запланировано")
@@ -2991,37 +3004,51 @@ def patient_dashboard():
              "status": "Открыто",  "hours": "08:00 - 00:00", "lat": 55.7610,  "lon": 37.6250},
         ]
 
-        # ---- Карта ----
-        try:
-            import folium
-            from streamlit_folium import st_folium
+        # ---- Карта (встроенный Leaflet.js без дополнительных библиотек) ----
+        markers_js = ""
+        for ph in pharmacies:
+            color = "'#22C55E'" if ph["status"] == "Открыто" else "'#EF4444'"
+            status_text = ph["status"]
+            popup_text = f"{ph['name']}|{ph['address']}|{status_text}|{ph['hours']}|{ph['distance']}"
+            markers_js += f"""
+            L.marker([{ph['lat']}, {ph['lon']}], {{
+                icon: L.divIcon({{
+                    className: '',
+                    html: '<div style="width:28px;height:28px;background:{color};border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;"><svg width="14" height="14" fill="white" viewBox="0 0 16 16"><path d="M8 1.5a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9zm-6 4.5a6 6 0 1 1 10.174 4.31c-.203.196-.43.372-.664.53L8 15l-3.51-4.16A6 6 0 0 1 2 6z"/></svg></div>',
+                    iconSize: [28, 28],
+                    iconAnchor: [14, 28],
+                    popupAnchor: [0, -30]
+                }})
+            }}).addTo(map)
+            .bindPopup(`<div style="font-family:sans-serif;min-width:190px;padding:4px 2px;">
+                <strong style="font-size:0.97rem;">{ph['name']}</strong><br>
+                <span style="color:#6B7280;font-size:0.83rem;">{ph['address']}</span><br>
+                <span style="color:{ph['status'] == 'Открыто' and '#22C55E' or '#EF4444'};font-weight:600;">{ph['status']}</span>
+                &nbsp;&bull;&nbsp;<span style="font-size:0.83rem;">{ph['hours']}</span><br>
+                <span style="color:#0A2F6C;font-weight:600;font-size:0.9rem;">{ph['distance']} от вас</span>
+            </div>`, {{maxWidth: 240}})
+            .bindTooltip("{ph['name']}", {{permanent: false}});
+            """
 
-            map_center = [55.7570, 37.6190]
-            ph_map = folium.Map(location=map_center, zoom_start=14,
-                                tiles="OpenStreetMap", prefer_canvas=True)
-
-            for ph in pharmacies:
-                color = "green" if ph["status"] == "Открыто" else "red"
-                popup_html = f"""
-                    <div style="font-family:sans-serif;min-width:180px;">
-                        <strong style="font-size:1rem;">{ph['name']}</strong><br>
-                        <span style="color:#6B7280;font-size:0.85rem;">{ph['address']}</span><br>
-                        <span style="color:{'#22C55E' if ph['status'] == 'Открыто' else '#EF4444'};
-                              font-weight:600;">{ph['status']}</span>
-                        &nbsp;&bull;&nbsp;работает: {ph['hours']}<br>
-                        <span style="color:#0A2F6C;font-weight:600;">{ph['distance']} от вас</span>
-                    </div>
-                """
-                folium.Marker(
-                    location=[ph["lat"], ph["lon"]],
-                    popup=folium.Popup(popup_html, max_width=250),
-                    tooltip=ph["name"],
-                    icon=folium.Icon(color=color, icon="plus-sign", prefix="glyphicon")
-                ).add_to(ph_map)
-
-            st_folium(ph_map, height=380, use_container_width=True)
-        except ImportError:
-            st.info("Карта недоступна. Добавьте folium и streamlit-folium в requirements.txt")
+        map_html = f"""
+        <!DOCTYPE html><html><head>
+        <meta charset="utf-8">
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <style>body{{margin:0;padding:0;}} #map{{width:100%;height:380px;border-radius:10px;}}</style>
+        </head><body>
+        <div id="map"></div>
+        <script>
+            var map = L.map('map').setView([55.7570, 37.6190], 14);
+            L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
+                attribution: '&copy; OpenStreetMap',
+                maxZoom: 19
+            }}).addTo(map);
+            {markers_js}
+        </script>
+        </body></html>
+        """
+        st.components.v1.html(map_html, height=390, scrolling=False)
 
         st.markdown("<div style='margin-top:1rem;'></div>", unsafe_allow_html=True)
 
@@ -3189,89 +3216,173 @@ def patient_dashboard():
     # ВКЛ 6: ПОЛИПРАГМАЗИЯ
     # ================================================================
     elif patient_tab == "Полипрагмазия":
-        st.markdown('<div class="card"><div class="card-header">Анализ полипрагмазии</div>', unsafe_allow_html=True)
+        st.markdown('<div class="card"><div class="card-header">Калькулятор полипрагмазии</div>', unsafe_allow_html=True)
 
+        # ---- Стационарные данные по назначенным препаратам ----
         result = analyze_polypharmacy(pid)
+        assigned_drugs = [p[1] for p in prescriptions]  # названия всех назначенных
         num_drugs = result['num_drugs']
         risk_level = result['risk_level']
-        interactions = result['interactions']
 
         risk_labels = {
-            'low':      ('Низкий',       '#28a745', '#d4edda'),
-            'medium':   ('Умеренный',    '#856404', '#fff3cd'),
-            'high':     ('Высокий',      '#721c24', '#f8d7da'),
-            'critical': ('Критический',  '#721c24', '#f5c6cb'),
+            'low':      ('Низкий',      '#28a745', '#d4edda'),
+            'medium':   ('Умеренный',  '#856404', '#fff3cd'),
+            'high':     ('Высокий',    '#721c24', '#f8d7da'),
+            'critical': ('Критический', '#721c24', '#f5c6cb'),
         }
-        label, text_color, bg_color = risk_labels.get(risk_level, ('Неизвестно', '#333', '#eee'))
-
-        risk_descriptions = {
-            'low':      'Количество препаратов в норме. Риск взаимодействия минимален.',
-            'medium':   'Отмечается повышенная нагрузка препаратами. Рекомендуется консультация врача.',
-            'high':     'Высокая полипрагмазия. Необходима проверка назначений врачом.',
-            'critical': 'Критическая полипрагмазия! Срочно обратитесь к лечащему врачу.',
+        risk_desc = {
+            'low':      'Количество препаратов в норме.',
+            'medium':   'Повышенная нагрузка. Рекомендуется консультация.',
+            'high':     'Высокая полипрагмазия. Необходима проверка врачом.',
+            'critical': 'Критическая полипрагмазия! Срочно к врачу.',
         }
+        label_r, text_r, bg_r = risk_labels.get(risk_level, ('Неизвестно', '#333', '#eee'))
 
-        col_a, col_b = st.columns(2)
-        with col_a:
+        # ---- Сводка: назначенные препараты + риск ----
+        c1, c2, c3 = st.columns(3)
+        with c1:
             st.markdown(f"""
-                <div style="background: #f8f9fa; border-radius: 10px; padding: 1.2rem;
-                            text-align: center; border: 1px solid #dee2e6;">
-                    <div style="font-size: 2.5rem; font-weight: 700;
-                                color: #0A2F6C;">{num_drugs}</div>
-                    <div style="font-size: 0.85rem; color: #666; margin-top: 0.3rem;">
-                        Назначенных препаратов
-                    </div>
-                </div>
-            """, unsafe_allow_html=True)
-        with col_b:
+            <div style="background:#F8FAFC;border-radius:10px;padding:1rem;
+                        text-align:center;border:1px solid #E2E8F0;">
+                <div style="font-size:2rem;font-weight:700;color:#0A2F6C;">{num_drugs}</div>
+                <div style="font-size:0.82rem;color:#6B7280;margin-top:0.2rem;">Назначенных</div>
+            </div>""", unsafe_allow_html=True)
+        with c2:
+            n_comb = num_drugs * (num_drugs - 1) // 2 if num_drugs > 1 else 0
             st.markdown(f"""
-                <div style="background: {bg_color}; border-radius: 10px; padding: 1.2rem;
-                            text-align: center; border: 1px solid #dee2e6;">
-                    <div style="font-size: 1.3rem; font-weight: 700;
-                                color: {text_color};">{label}</div>
-                    <div style="font-size: 0.85rem; color: {text_color}; margin-top: 0.3rem;">
-                        Уровень риска
-                    </div>
-                </div>
-            """, unsafe_allow_html=True)
+            <div style="background:#F8FAFC;border-radius:10px;padding:1rem;
+                        text-align:center;border:1px solid #E2E8F0;">
+                <div style="font-size:2rem;font-weight:700;color:#0A2F6C;">{n_comb}</div>
+                <div style="font-size:0.82rem;color:#6B7280;margin-top:0.2rem;">Комбинаций</div>
+            </div>""", unsafe_allow_html=True)
+        with c3:
+            st.markdown(f"""
+            <div style="background:{bg_r};border-radius:10px;padding:1rem;
+                        text-align:center;border:1px solid #dee2e6;">
+                <div style="font-size:1.15rem;font-weight:700;color:{text_r};">{label_r}</div>
+                <div style="font-size:0.82rem;color:{text_r};margin-top:0.2rem;">Риск</div>
+            </div>""", unsafe_allow_html=True)
 
         st.markdown(f"""
-            <div style="margin-top: 1rem; padding: 0.9rem 1.2rem;
-                        background: {bg_color}; border-radius: 8px;
-                        color: {text_color}; font-size: 0.9rem;">
-                {risk_descriptions.get(risk_level, '')}
-            </div>
-        """, unsafe_allow_html=True)
+        <div style="margin:0.8rem 0;padding:0.7rem 1rem;background:{bg_r};
+                    border-radius:8px;color:{text_r};font-size:0.88rem;">
+            {risk_desc.get(risk_level, '')}
+        </div>""", unsafe_allow_html=True)
 
-        st.markdown("<div style='margin-top: 1.5rem;'></div>", unsafe_allow_html=True)
+        st.divider()
 
-        if interactions:
-            st.markdown("**Выявленные взаимодействия препаратов:**")
-            sev_color = {'high': '#f8d7da', 'medium': '#fff3cd', 'low': '#d4edda'}
-            sev_label = {'high': 'Высокая степень', 'medium': 'Умеренная степень', 'low': 'Низкая степень'}
-            for ix in interactions:
-                bg = sev_color.get(ix['severity'], '#f0f0f0')
-                lbl = sev_label.get(ix['severity'], ix['severity'])
-                st.markdown(f"""
-                    <div style="background: {bg}; border-radius: 8px;
-                                padding: 0.7rem 1rem; margin-bottom: 0.6rem;
-                                font-size: 0.88rem;">
-                        <strong>{ix['drug1']}</strong> + <strong>{ix['drug2']}</strong>
-                        &nbsp;&mdash;&nbsp;<em>{lbl}</em><br>
-                        {ix['description']}
-                    </div>
-                """, unsafe_allow_html=True)
+        # ================================================================
+        # КАЛЬКУЛЯТОР: проверка комбинации препаратов
+        # ================================================================
+        st.markdown("**Проверка взаимодействия препаратов**")
+        st.caption("Выберите один или несколько препаратов из списка назначенных и нажмите «Проверить»— ассистент покажет все пары и их взаимодействие.")
+
+        if assigned_drugs:
+            # Множественный выбор из назначенных
+            selected_for_calc = st.multiselect(
+                "Выберите препараты для анализа:",
+                options=assigned_drugs,
+                default=assigned_drugs,  # по умолчанию все
+                key="poly_calc_select"
+            )
+
+            # Поле для добавления внешнего препарата
+            extra_drug = st.text_input(
+                "Добавить препарат вручную (необязательно):",
+                placeholder="например, Ибупрофен...",
+                key="poly_calc_extra"
+            )
+
+            calc_btn = st.button("Проверить взаимодействия",
+                                 type="primary", use_container_width=True)
+
+            if calc_btn:
+                # Сбор всех препаратов для расчёта
+                calc_drugs = list(selected_for_calc)
+                if extra_drug.strip():
+                    calc_drugs.append(extra_drug.strip())
+
+                if len(calc_drugs) < 2:
+                    st.warning("Выберите не менее двух препаратов для анализа")
+                else:
+                    st.session_state['poly_calc_result'] = calc_drugs
+
+            # Отображение результатов
+            if 'poly_calc_result' in st.session_state:
+                calc_drugs = st.session_state['poly_calc_result']
+
+                # Количество и риск
+                n = len(calc_drugs)
+                if age >= 65:
+                    thr = {'low': 2, 'medium': 4, 'high': 7, 'critical': 10}
+                else:
+                    thr = {'low': 3, 'medium': 5, 'high': 8, 'critical': 11}
+
+                if n >= thr['critical']: rl = 'critical'
+                elif n >= thr['high']:   rl = 'high'
+                elif n >= thr['medium']: rl = 'medium'
+                else:                    rl = 'low'
+
+                lab2, tc2, bc2 = risk_labels.get(rl, ('Неизвестно', '#333', '#eee'))
+
+                st.markdown("---")
+                st.markdown(f"**Результат анализа:** {n} препарата — "
+                             f"<span style='color:{tc2};font-weight:700;'>риск {lab2.lower()}</span>",
+                             unsafe_allow_html=True)
+
+                # Все пары
+                sev_color = {'high': '#f8d7da', 'medium': '#fff3cd', 'low': '#d4edda'}
+                sev_icon  = {'high': '!', 'medium': '~', 'low': 'OK'}
+                sev_label_map = {'high': 'Высокая опасность',
+                                 'medium': 'Умеренная опасность',
+                                 'low': 'Низкая опасность'}
+
+                found_any = False
+                no_data_pairs = []
+
+                for i in range(len(calc_drugs)):
+                    for j in range(i + 1, len(calc_drugs)):
+                        d1, d2 = calc_drugs[i], calc_drugs[j]
+                        ix_result = get_drug_interactions(d1, d2)
+                        if ix_result:
+                            found_any = True
+                            sev, desc = ix_result
+                            bg_ix = sev_color.get(sev, '#f0f0f0')
+                            icon  = sev_icon.get(sev, '?')
+                            lbl_ix = sev_label_map.get(sev, sev)
+                            st.markdown(f"""
+                            <div style="background:{bg_ix};border-radius:10px;
+                                        padding:0.8rem 1rem;margin-bottom:0.5rem;">
+                                <div style="display:flex;justify-content:space-between;
+                                            align-items:center;">
+                                    <span style="font-weight:700;font-size:0.9rem;">
+                                        {d1} + {d2}
+                                    </span>
+                                    <span style="font-size:0.78rem;font-weight:600;">{lbl_ix}</span>
+                                </div>
+                                <div style="font-size:0.84rem;margin-top:0.35rem;color:#374151;">{desc}</div>
+                            </div>""", unsafe_allow_html=True)
+                        else:
+                            no_data_pairs.append(f"{d1} + {d2}")
+
+                if not found_any:
+                    st.success("Взаимодействий в базе не найдено."
+                               " Это не исключает их наличия — проконсультируйтесь с врачом.")
+
+                if no_data_pairs:
+                    with st.expander(f"Пары без данных в базе ({len(no_data_pairs)})"):
+                        for pair in no_data_pairs:
+                            st.markdown(f"<span style='color:#9CA3AF;font-size:0.84rem;'>{pair} — данных нет</span>",
+                                        unsafe_allow_html=True)
         else:
-            st.success("Взаимодействия между назначенными препаратами не выявлены.")
+            st.info("Нет назначенных препаратов для анализа")
 
         st.markdown("""
-            <div style="margin-top: 1.2rem; padding: 0.8rem 1rem;
-                        background: #e8f4fd; border-radius: 8px;
-                        font-size: 0.83rem; color: #0A2F6C;">
-                <strong>Внимание:</strong> данная страница носит информационный характер.
-                При любых опасениях обратитесь к лечащему врачу.
-            </div>
-        """, unsafe_allow_html=True)
+        <div style="margin-top:1.2rem;padding:0.7rem 1rem;background:#e8f4fd;
+                    border-radius:8px;font-size:0.82rem;color:#0A2F6C;">
+            <strong>Внимание:</strong> носит информационный характер.
+            При любых опасениях обратитесь к врачу.
+        </div>""", unsafe_allow_html=True)
 
         st.markdown('</div>', unsafe_allow_html=True)
 
