@@ -696,7 +696,7 @@ def save_patient(pid, last_name, first_name, birth_date, policy, location, presc
                      (patient_id, drug_name, dosage, regularity, start_date, end_date,
                       indication, instructions, food_relation, special_notes)
                      VALUES (?,?,?,?,?,?,?,?,?,?)""",
-                 (pid, drug[0], drug[1], drug[2], "2026-05-01", "2026-06-01",
+                 (pid, drug[0], drug[1], drug[2], date.today().strftime("%Y-%m-%d"), (date.today() + timedelta(days=365)).strftime("%Y-%m-%d"),
                   drug[3] if len(drug) > 3 else "",
                   drug[4] if len(drug) > 4 else "",
                   drug[5] if len(drug) > 5 else "",
@@ -821,59 +821,68 @@ def doctor_chat_page():
     if not pid:
         st.session_state['page'] = 'doctor_dashboard'
         st.rerun()
-    
+
     patient, _ = get_patient_by_id(pid)
     full_name = f"{patient[1]} {patient[2]}"
-    
-    render_breadcrumb([f"Чат с {full_name}"])
-    
-    st.markdown(f'<div class="card"><div class="card-header">Чат с пациентом {full_name}</div>', unsafe_allow_html=True)
-    
+    birth_date = datetime.strptime(patient[3], "%Y-%m-%d").date()
+    age = (date.today() - birth_date).days // 365
+
+    # Шапка
+    st.markdown(f"""
+    <div style="background:linear-gradient(135deg,#0A2F6C,#1E3A8A);border-radius:10px;
+                padding:1rem 1.5rem;margin-bottom:1rem;color:white;
+                display:flex;align-items:center;gap:1rem;">
+        <div style="width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,0.2);
+                    display:flex;align-items:center;justify-content:center;font-size:1.3rem;font-weight:700;">
+            {full_name[0]}
+        </div>
+        <div>
+            <div style="font-size:1.05rem;font-weight:700;">{full_name}</div>
+            <div style="font-size:0.82rem;opacity:0.8;">{age} лет · Чат для уточнений по терапии</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    col_back, _ = st.columns([0.25, 0.75])
+    with col_back:
+        if st.button("← К пациенту", key="chat_back_btn"):
+            st.session_state['page'] = 'doctor_edit'
+            st.rerun()
+
+    # Область сообщений
     messages = get_messages(pid)
-    if not messages:
-        st.info("Нет сообщений")
-    
-    for sender, msg, timestamp in messages:
-        time_obj = datetime.fromisoformat(timestamp)
-        time_str = time_obj.strftime("%H:%M")
-        if sender == st.session_state.get('user_name'):
-            st.markdown(f"""
-            <div class="chat-message-user">
-                <div>
-                    <div>{msg}</div>
-                    <div style="font-size: 0.7rem; opacity: 0.7; margin-top: 0.25rem;">{time_str}</div>
-</div>
-</div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown(f"""
-            <div class="chat-message-assistant">
-                <div>
-                    <div><strong>{sender}</strong><br>{msg}</div>
-                    <div style="font-size: 0.7rem; opacity: 0.7; margin-top: 0.25rem;">{time_str}</div>
-</div>
-</div>
-            """, unsafe_allow_html=True)
-    
-    st.divider()
-    col1, col2 = st.columns([0.85, 0.15])
-    with col1:
-        new_msg = st.text_area("Сообщение:", key="chat_input", height=80, label_visibility="collapsed", placeholder="Напишите сообщение...")
-    with col2:
-        if st.button("Отправить", use_container_width=True):
+    chat_box = st.container(height=420, border=True)
+    with chat_box:
+        if not messages:
+            st.markdown("<div style='color:#9CA3AF;text-align:center;padding:2rem;'>Нет сообщений. Начните переписку.</div>",
+                        unsafe_allow_html=True)
+        for sender, msg, timestamp in messages:
+            time_str = datetime.fromisoformat(timestamp).strftime("%d.%m %H:%M")
+            is_me = sender == st.session_state.get('user_name')
+            if is_me:
+                with st.chat_message("user"):
+                    st.markdown(msg)
+                    st.caption(f"{sender} · {time_str}")
+            else:
+                with st.chat_message("assistant"):
+                    st.markdown(f"**{sender}**")
+                    st.markdown(msg)
+                    st.caption(time_str)
+
+    # Поле ввода
+    col_inp, col_send = st.columns([0.82, 0.18])
+    with col_inp:
+        new_msg = st.text_input("", placeholder="Напишите сообщение...",
+                                key="doctor_chat_input", label_visibility="collapsed")
+    with col_send:
+        if st.button("Отправить", key="doctor_chat_send", use_container_width=True, type="primary"):
             if new_msg.strip():
                 add_message(pid, st.session_state.get('user_name', 'Врач'), new_msg)
                 st.rerun()
-    
-    st.divider()
-    if st.button("Вернуться на страницу пациентов"):
-        st.session_state['page'] = 'doctor_dashboard'
-        st.rerun()
-    
-    st.markdown('</div>', unsafe_allow_html=True)
+
     render_footer()
 
-# ========================== ИСТОРИЯ ПРЕПАРАТОВ ==========================
+
 def patient_prescription_history():
     pid = st.session_state.get('history_patient_id')
     if not pid:
@@ -916,83 +925,139 @@ def patient_prescription_history():
         """, unsafe_allow_html=True)
     
     st.divider()
-    st.subheader("История приема")
-    
-    selected_drug_idx = st.selectbox(
-        "Выберите препарат для просмотра приема:",
-        range(len(all_prescriptions)),
-        format_func=lambda i: f"{all_prescriptions[i][1]} ({all_prescriptions[i][2]})"
-    )
-    
-    selected_prescription = all_prescriptions[selected_drug_idx]
-    presc_id = selected_prescription[0]
-    drug_name = selected_prescription[1]
-    
-    st.subheader(f"История приема: {drug_name}")
-    
+    st.subheader("История приёма")
+
+    col_mode, col_filter = st.columns([0.5, 0.5])
+    with col_mode:
+        view_mode = st.radio(
+            "Режим просмотра:",
+            ["По конкретному препарату", "По всем препаратам"],
+            horizontal=True,
+            key="hist_view_mode"
+        )
+
     col1, col2 = st.columns(2)
     with col1:
         month_num = st.selectbox(
             "Месяц:",
             range(1, 13),
-            format_func=lambda x: ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", 
+            index=date.today().month - 1,
+            format_func=lambda x: ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
                                    "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"][x-1]
         )
     with col2:
-        selected_year = st.selectbox("Год:", range(date.today().year - 1, date.today().year + 1))
-    
-    intake_dates = get_intake_dates_for_prescription(presc_id)
-    intake_dates_set = set(intake_dates)
-    
-    calendar_data = cal.monthcalendar(selected_year, month_num)
-    month_name = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", 
+        selected_year = st.selectbox("Год:", range(date.today().year - 1, date.today().year + 1),
+                                     index=1)
+
+    month_name = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
                   "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"][month_num - 1]
-    
-    st.markdown(f"<h4 style='text-align: center; color: #0A2F6C;'>{month_name} {selected_year}</h4>", unsafe_allow_html=True)
-    
-    html_calendar = '<table class="calendar-table"><tr>'
-    days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
-    
-    for day in days:
-        html_calendar += f'<td class="calendar-day-header">{day}<td>'
-    html_calendar += '<tr><tr>'
-    
-    day_count = 0
-    for week in calendar_data:
-        for day in week:
-            if day == 0:
-                html_calendar += '<td class="calendar-day"><td>'
-            else:
-                date_str = f"{selected_year:04d}-{month_num:02d}-{day:02d}"
-                is_taken = date_str in intake_dates_set
-                bg_color = '#0A2F6C' if is_taken else '#FFFFFF'
-                text_color = 'white' if is_taken else '#1F2A3E'
-                font_weight = 'bold' if is_taken else 'normal'
-                
-                html_calendar += f'<td class="calendar-day" style="background-color: {bg_color}; color: {text_color}; font-weight: {font_weight};">{day}</td>'
-            
-            day_count += 1
-            if day_count % 7 == 0:
-                html_calendar += '<tr><tr>'
-    
-    html_calendar += '</table>'
-    st.markdown(html_calendar, unsafe_allow_html=True)
-    
-    st.divider()
-    st.subheader("История приема препарата")
-    
-    recent_intakes = intake_dates[:30]
-    
-    if recent_intakes:
-        intake_df = pd.DataFrame({
-            'Дата приема': recent_intakes,
-            'Препарат': [drug_name] * len(recent_intakes),
-            'Статус': ['Принято'] * len(recent_intakes)
-        })
-        st.dataframe(intake_df, use_container_width=True, hide_index=True)
+
+    if view_mode == "По конкретному препарату":
+        selected_drug_idx = st.selectbox(
+            "Выберите препарат:",
+            range(len(all_prescriptions)),
+            format_func=lambda i: f"{all_prescriptions[i][1]} ({all_prescriptions[i][2]})"
+        )
+        selected_prescription = all_prescriptions[selected_drug_idx]
+        presc_id = selected_prescription[0]
+        drug_name = selected_prescription[1]
+
+        intake_dates = get_intake_dates_for_prescription(presc_id)
+        intake_dates_set = set(intake_dates)
+
+        st.markdown(f"<h4 style='text-align:center;color:#0A2F6C;'>{drug_name} — {month_name} {selected_year}</h4>", unsafe_allow_html=True)
+        calendar_data = cal.monthcalendar(selected_year, month_num)
+        html_calendar = '<table class="calendar-table"><thead><tr>'
+        for d in ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']:
+            html_calendar += f'<th class="calendar-day-header">{d}</th>'
+        html_calendar += '</tr></thead><tbody>'
+        for week in calendar_data:
+            html_calendar += '<tr>'
+            for day in week:
+                if day == 0:
+                    html_calendar += '<td class="calendar-day"></td>'
+                else:
+                    ds = f"{selected_year:04d}-{month_num:02d}-{day:02d}"
+                    taken = ds in intake_dates_set
+                    bg = '#0A2F6C' if taken else '#FFFFFF'
+                    tc = 'white' if taken else '#1F2A3E'
+                    fw = 'bold' if taken else 'normal'
+                    html_calendar += f'<td class="calendar-day" style="background-color:{bg};color:{tc};font-weight:{fw};">{day}</td>'
+            html_calendar += '</tr>'
+        html_calendar += '</tbody></table>'
+        st.markdown(html_calendar, unsafe_allow_html=True)
+
+        st.divider()
+        st.subheader(f"Таблица приёмов: {drug_name}")
+        drug_filter = drug_name
+        recent_intakes = intake_dates[:60]
+        if recent_intakes:
+            intake_df = pd.DataFrame({
+                'Дата приёма': recent_intakes,
+                'Препарат': [drug_name] * len(recent_intakes),
+                'Статус': ['Принято'] * len(recent_intakes)
+            })
+            st.dataframe(intake_df, use_container_width=True, hide_index=True)
+        else:
+            st.info("Нет записей о приёме препарата")
+
     else:
-        st.info("Нет записей о приеме препарата")
-    
+        # Режим: все препараты
+        st.markdown(f"<h4 style='text-align:center;color:#0A2F6C;'>Все препараты — {month_name} {selected_year}</h4>", unsafe_allow_html=True)
+
+        # Собираем все даты приёмов за месяц по всем препаратам
+        all_intake_set = {}  # date_str -> list of drug names
+        all_intake_rows = []
+        for presc in all_prescriptions:
+            presc_id_all = presc[0]
+            drug_n = presc[1]
+            dates_all = get_intake_dates_for_prescription(presc_id_all)
+            for d in dates_all:
+                if not all_intake_set.get(d):
+                    all_intake_set[d] = []
+                all_intake_set[d].append(drug_n)
+                all_intake_rows.append({'Дата приёма': d, 'Препарат': drug_n, 'Статус': 'Принято'})
+
+        calendar_data = cal.monthcalendar(selected_year, month_num)
+        html_calendar = '<table class="calendar-table"><thead><tr>'
+        for d in ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']:
+            html_calendar += f'<th class="calendar-day-header">{d}</th>'
+        html_calendar += '</tr></thead><tbody>'
+        for week in calendar_data:
+            html_calendar += '<tr>'
+            for day in week:
+                if day == 0:
+                    html_calendar += '<td class="calendar-day"></td>'
+                else:
+                    ds = f"{selected_year:04d}-{month_num:02d}-{day:02d}"
+                    drugs_on_day = all_intake_set.get(ds, [])
+                    count = len(drugs_on_day)
+                    if count == 0:
+                        html_calendar += f'<td class="calendar-day" style="background:#FFFFFF;color:#1F2A3E;">{day}</td>'
+                    elif count <= 2:
+                        html_calendar += f'<td class="calendar-day" style="background:#93C5FD;color:#1F2A3E;font-weight:bold;" title="{", ".join(drugs_on_day)}">{day}<br><span style="font-size:0.65rem;">{count}п</span></td>'
+                    else:
+                        html_calendar += f'<td class="calendar-day" style="background:#0A2F6C;color:white;font-weight:bold;" title="{", ".join(drugs_on_day)}">{day}<br><span style="font-size:0.65rem;">{count}п</span></td>'
+            html_calendar += '</tr>'
+        html_calendar += '</tbody></table>'
+        st.markdown(html_calendar, unsafe_allow_html=True)
+        st.caption("Синий = 1–2 препарата, тёмно-синий = 3+. Наведите на дату для подробностей.")
+
+        st.divider()
+        st.subheader("Таблица всех приёмов")
+
+        drug_filter_opts = ["Все препараты"] + [p[1] for p in all_prescriptions]
+        drug_filter_sel = st.selectbox("Фильтр по препарату:", drug_filter_opts, key="hist_all_filter")
+
+        if all_intake_rows:
+            df_all = pd.DataFrame(all_intake_rows)
+            df_all = df_all.sort_values("Дата приёма", ascending=False)
+            if drug_filter_sel != "Все препараты":
+                df_all = df_all[df_all["Препарат"] == drug_filter_sel]
+            st.dataframe(df_all.head(100), use_container_width=True, hide_index=True)
+        else:
+            st.info("Нет записей о приёме")
+
     st.markdown('</div>', unsafe_allow_html=True)
 
 # ========================== ДОБАВЛЕНИЕ ПАЦИЕНТА ==========================
@@ -1317,16 +1382,35 @@ def polypharmacy_analysis():
     col1, col2 = st.columns(2)
 
     with col1:
-        freqs = {}
+        # Количество препаратов по кратности приёма
+        intake_counts = {'1 раз в день': 0, '2 раза в день': 0, '3 раза в день': 0, 'Другое': 0}
         for presc in prescriptions:
-            freq = presc[3]
-            freqs[freq] = freqs.get(freq, 0) + 1
-        if freqs:
-            fig1 = px.bar(x=list(freqs.keys()), y=list(freqs.values()),
-                          labels={'x': 'Режим приёма', 'y': 'Кол-во препаратов'},
-                          title="Режимы приёма")
-            fig1.update_traces(marker_color='#0A2F6C')
-            fig1.update_layout(height=300, showlegend=False)
+            reg = presc[3].lower()
+            if '1 раз' in reg or 'однократно' in reg:
+                intake_counts['1 раз в день'] += 1
+            elif '2 раза' in reg or 'дважды' in reg:
+                intake_counts['2 раза в день'] += 1
+            elif '3 раза' in reg or 'трижды' in reg:
+                intake_counts['3 раза в день'] += 1
+            else:
+                intake_counts['Другое'] += 1
+        intake_counts = {k: v for k, v in intake_counts.items() if v > 0}
+        if intake_counts:
+            colors_map = {'1 раз в день': '#0A2F6C', '2 раза в день': '#1E3A8A',
+                          '3 раза в день': '#3B82F6', 'Другое': '#93C5FD'}
+            fig1 = go.Figure(go.Bar(
+                x=list(intake_counts.keys()),
+                y=list(intake_counts.values()),
+                marker_color=[colors_map.get(k, '#93C5FD') for k in intake_counts.keys()],
+                text=list(intake_counts.values()),
+                textposition='outside'
+            ))
+            fig1.update_layout(
+                title="Препараты по кратности приёма",
+                yaxis=dict(title="Кол-во препаратов", dtick=1),
+                height=300, showlegend=False,
+                plot_bgcolor='#FAFBFC', paper_bgcolor='#FAFBFC'
+            )
             st.plotly_chart(fig1, use_container_width=True)
 
     with col2:
@@ -1650,7 +1734,7 @@ def patient_dashboard_doctor():
         
         for col, (time_slot, drugs) in zip(cols, schedule.items()):
             with col:
-                st.markdown(f"**{icons[time_slot]} {time_slot}**")
+                st.markdown(f"<div style='font-weight:700;color:#0A2F6C;font-size:0.95rem;margin:0.5rem 0 0.2rem 0;'>{icons[time_slot]} {time_slot}</div>", unsafe_allow_html=True)
                 if drugs:
                     for d in drugs:
                         st.markdown(f"""
@@ -1732,7 +1816,7 @@ def patient_dashboard_doctor():
             fig_bubble.update_layout(height=450)
             st.plotly_chart(fig_bubble, use_container_width=True)
             
-            st.write("**Детальная статистика по препаратам:**")
+            st.markdown("<h4 style='color:#0A2F6C;'>Детальная статистика по препаратам</h4>", unsafe_allow_html=True)
             st.dataframe(
                 df_stats[["Препарат","Дозировка","Регулярность","Дней назначен","Всего приёмов","Приверженность %"]],
                 use_container_width=True,
@@ -1907,7 +1991,7 @@ def doctor_patients_page():
 
 # ========================== АНАЛИТИКА ВРАЧА (РАСШИРЕННАЯ) ==========================
 def drug_analytics_dashboard():
-    render_breadcrumb(["Аналитика"])
+    render_breadcrumb(["Дашборд препаратов"])
     
     st.markdown('<div class="card"><div class="card-header">Аналитика лекарственных препаратов</div>', unsafe_allow_html=True)
     
@@ -2401,7 +2485,7 @@ def get_ai_response(conversation_history, patient_info):
     """Получить ответ от ИИ ассистента через Groq API"""
 
     drugs_list = ', '.join([p[1] for p in patient_info['prescriptions']]) if patient_info['prescriptions'] else 'не указаны'
-    system_prompt = f"""Ты - медицинский ассистент. Отвечай на русском языке.
+    system_prompt = f"""Ты — дружелюбный медицинский ассистент пациента. Отвечай строго на русском языке.
 
 Данные пациента:
 - Имя: {patient_info['name']}
@@ -2409,14 +2493,18 @@ def get_ai_response(conversation_history, patient_info):
 - Назначенные препараты: {drugs_list}
 - Противопоказания: {patient_info['contraindications']}
 
-ПРАВИЛА (строго соблюдай):
-1. Отвечай кратко: не более 80 слов.
-2. Используй 2-3 коротких абзаца или маркированный список.
-3. НЕ ставь диагнозы.
-4. НЕ рекомендуй препараты или их замены.
-5. Все вопросы о лечении: 'обсудите с вашим врачом'.
-6. Помогай понимать назначенные препараты простым языком.
-7. Никогда не упоминай учёные степени или квалификации."""
+КАК СТРОИТЬ ОТВЕТ (обязательный формат):
+1. Сначала дай прямой ответ на вопрос — да/нет/зависит от ситуации (1 предложение).
+2. Объясни простыми словами в 2-3 предложениях: что это значит для пациента, как препарат действует, что важно знать.
+3. В конце добавь одну фразу: "Для принятия окончательного решения уточните у вашего лечащего врача."
+
+ПРАВИЛА:
+- Объясняй механизм и цель препарата простым языком — НЕ отказывай в объяснении.
+- Если спрашивают о побочных эффектах — перечисли основные коротко.
+- Если спрашивают о режиме приёма — дай конкретный ответ на основе назначений пациента.
+- НЕ ставь диагнозы и НЕ назначай новые препараты.
+- НЕ говори только "обратитесь к врачу" без объяснения — это бесполезно.
+- Максимум 100 слов в ответе. Будь конкретен и полезен."""
 
     # Получаем API-ключ: сначала из secrets, потом из переменной окружения
     api_key = ""
@@ -2565,7 +2653,8 @@ def ai_assistant_chat(pid, patient_data):
 
         api_history = [{"role": m["role"], "content": m["content"]} for m in chat_history]
         api_history[-1]["content"] += (
-            "\n\n[Отвечай строго не более 80 слов. 2-3 абзаца или список. Никаких лишних слов.]"
+            "\n\n[Формат: 1) прямой ответ, 2) объяснение 2-3 предложения, 3) фраза про врача. До 100 слов.]"
+
         )
 
         with st.spinner("Ассистент печатает..."):
@@ -2896,7 +2985,7 @@ def patient_dashboard():
         st.divider()
 
         # ---- Напоминания ----
-        st.markdown("**Настройка напоминаний**")
+        st.markdown("<h4 style='color:#0A2F6C;margin-top:1rem;'>Настройка напоминаний</h4>", unsafe_allow_html=True)
         col1, col2, col3 = st.columns(3)
         with col1:
             push = st.toggle("Push", value=True)
@@ -3010,121 +3099,146 @@ def patient_dashboard():
     # ================================================================
     elif patient_tab == "Заказ в аптеке":
         st.markdown('<div class="card"><div class="card-header"> Заказ препаратов в аптеке</div>', unsafe_allow_html=True)
-        
-        st.caption("Заказывайте все назначенные препараты в один клик")
-        
+
+        # ---- Препараты для заказа ----
+        st.markdown("<h4 style='color:#0A2F6C;margin-bottom:0.5rem;'>Мои назначенные препараты</h4>", unsafe_allow_html=True)
+        st.caption("Выберите препараты для включения в заказ")
+
+        total_items = []
         if prescriptions:
-            st.subheader("Мои назначенные препараты")
-            
-            total_items = []
             for presc in prescriptions:
                 is_active = datetime.strptime(presc[5], "%Y-%m-%d").date() >= date.today()
                 if is_active:
                     key = f"order_{presc[0]}"
-                    selected = st.checkbox(f" {presc[1]} {presc[2]} — {presc[3]}", value=True, key=key)
+                    selected = st.checkbox(f"{presc[1]} {presc[2]} — {presc[3]}", value=True, key=key)
                     if selected:
                         total_items.append(presc[1])
-            
-            st.divider()
-            
-            if st.button(" Заказать все отмеченные в один клик", use_container_width=True):
-                if total_items:
-                    st.success(f" Заказ оформлен: {', '.join(total_items)}")
-                    st.balloons()
-                else:
-                    st.warning("Выберите хотя бы один препарат")
-        
+
+        # ---- Итог заказа ----
+        if total_items:
+            st.markdown(f"""
+            <div style="background:#EFF6FF;border:1.5px solid #BFDBFE;border-radius:10px;
+                        padding:1rem 1.3rem;margin:0.8rem 0;">
+                <div style="font-weight:700;color:#1D4ED8;margin-bottom:0.4rem;">Ваш заказ:</div>
+                {''.join([f'<div style="font-size:0.9rem;color:#374151;padding:0.15rem 0;">• {d}</div>' for d in total_items])}
+                <div style="margin-top:0.6rem;font-size:0.82rem;color:#6B7280;">{len(total_items)} препарат(а) выбрано</div>
+            </div>
+            """, unsafe_allow_html=True)
+
         st.divider()
 
-        # ---- Ближайшие аптеки ----
-        st.subheader("Ближайшие аптеки")
+        # ---- Схема аптек (карточная карта) ----
+        st.markdown("<h4 style='color:#0A2F6C;margin-bottom:0.3rem;'>Ближайшие аптеки</h4>", unsafe_allow_html=True)
+
+        # Схема-карта города
+        st.markdown("""
+        <div style="background:#F0F7FF;border:1.5px solid #BFDBFE;border-radius:12px;
+                    padding:1rem;margin-bottom:1rem;position:relative;overflow:hidden;min-height:120px;">
+            <div style="font-size:0.75rem;color:#6B7280;margin-bottom:0.6rem;font-weight:600;">СХЕМА РАЙОНА</div>
+            <!-- Улицы -->
+            <div style="position:absolute;top:50%;left:0;right:0;height:2px;background:#CBD5E1;"></div>
+            <div style="position:absolute;left:30%;top:0;bottom:0;width:2px;background:#CBD5E1;"></div>
+            <div style="position:absolute;left:65%;top:0;bottom:0;width:2px;background:#CBD5E1;"></div>
+            <!-- Метки -->
+            <div style="display:flex;gap:1rem;flex-wrap:wrap;justify-content:space-around;position:relative;z-index:2;padding-top:0.3rem;">
+                <div style="background:white;border:2px solid #22C55E;border-radius:8px;padding:0.4rem 0.7rem;text-align:center;min-width:90px;">
+                    <div style="font-size:0.7rem;font-weight:700;color:#0A2F6C;">Аптека 36.6</div>
+                    <div style="font-size:0.65rem;color:#22C55E;">● 0.3 км</div>
+                </div>
+                <div style="background:white;border:2px solid #22C55E;border-radius:8px;padding:0.4rem 0.7rem;text-align:center;min-width:90px;">
+                    <div style="font-size:0.7rem;font-weight:700;color:#0A2F6C;">Горздрав</div>
+                    <div style="font-size:0.65rem;color:#22C55E;">● 0.7 км</div>
+                </div>
+                <div style="background:white;border:2px solid #EF4444;border-radius:8px;padding:0.4rem 0.7rem;text-align:center;min-width:90px;">
+                    <div style="font-size:0.7rem;font-weight:700;color:#0A2F6C;">Ригла</div>
+                    <div style="font-size:0.65rem;color:#EF4444;">● 1.2 км</div>
+                </div>
+                <div style="background:white;border:2px solid #22C55E;border-radius:8px;padding:0.4rem 0.7rem;text-align:center;min-width:90px;">
+                    <div style="font-size:0.7rem;font-weight:700;color:#0A2F6C;">Самсон-Фарма</div>
+                    <div style="font-size:0.65rem;color:#22C55E;">● 1.8 км</div>
+                </div>
+            </div>
+            <div style="font-size:0.68rem;color:#9CA3AF;margin-top:0.5rem;">
+                ● Открыто &nbsp;&nbsp; ● Закрыто &nbsp;|&nbsp; Вы здесь: ★
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
         pharmacies = [
-            {"name": "Аптека 36.6",    "address": "ул. Ленина, 15",   "distance": "0.3 км",
-             "status": "Открыто",  "hours": "08:00 - 22:00", "lat": 55.7558,  "lon": 37.6173},
-            {"name": "Горздрав",      "address": "пр. Мира, 42",     "distance": "0.7 км",
-             "status": "Открыто",  "hours": "09:00 - 21:00", "lat": 55.7580,  "lon": 37.6210},
-            {"name": "Ригла",          "address": "ул. Садовая, 8",   "distance": "1.2 км",
-             "status": "Закрыто",  "hours": "10:00 - 20:00", "lat": 55.7530,  "lon": 37.6145},
-            {"name": "Самсон-Фарма", "address": "ул. Победы, 31",  "distance": "1.8 км",
-             "status": "Открыто",  "hours": "08:00 - 00:00", "lat": 55.7610,  "lon": 37.6250},
+            {"name": "Аптека 36.6",   "address": "ул. Ленина, 15",  "distance": "0.3 км",
+             "status": "Открыто",  "hours": "08:00–22:00",
+             "drugs": {"Энап": "45 ₽", "Аспирин Кардио": "89 ₽", "Метформин": "120 ₽"}},
+            {"name": "Горздрав",     "address": "пр. Мира, 42",    "distance": "0.7 км",
+             "status": "Открыто",  "hours": "09:00–21:00",
+             "drugs": {"Амлодипин": "67 ₽", "Метопролол": "98 ₽", "Аторвастатин": "210 ₽"}},
+            {"name": "Ригла",         "address": "ул. Садовая, 8",  "distance": "1.2 км",
+             "status": "Закрыто",  "hours": "10:00–20:00",
+             "drugs": {}},
+            {"name": "Самсон-Фарма", "address": "ул. Победы, 31", "distance": "1.8 км",
+             "status": "Открыто",  "hours": "08:00–00:00",
+             "drugs": {"Омепразол": "55 ₽", "Варфарин": "180 ₽", "Глюкофаж": "220 ₽"}},
         ]
 
-        # ---- Карта (встроенный Leaflet.js без дополнительных библиотек) ----
-        markers_js = ""
-        for ph in pharmacies:
-            color = "'#22C55E'" if ph["status"] == "Открыто" else "'#EF4444'"
-            status_text = ph["status"]
-            popup_text = f"{ph['name']}|{ph['address']}|{status_text}|{ph['hours']}|{ph['distance']}"
-            markers_js += f"""
-            L.marker([{ph['lat']}, {ph['lon']}], {{
-                icon: L.divIcon({{
-                    className: '',
-                    html: '<div style="width:28px;height:28px;background:{color};border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;"><svg width="14" height="14" fill="white" viewBox="0 0 16 16"><path d="M8 1.5a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9zm-6 4.5a6 6 0 1 1 10.174 4.31c-.203.196-.43.372-.664.53L8 15l-3.51-4.16A6 6 0 0 1 2 6z"/></svg></div>',
-                    iconSize: [28, 28],
-                    iconAnchor: [14, 28],
-                    popupAnchor: [0, -30]
-                }})
-            }}).addTo(map)
-            .bindPopup(`<div style="font-family:sans-serif;min-width:190px;padding:4px 2px;">
-                <strong style="font-size:0.97rem;">{ph['name']}</strong><br>
-                <span style="color:#6B7280;font-size:0.83rem;">{ph['address']}</span><br>
-                <span style="color:{ph['status'] == 'Открыто' and '#22C55E' or '#EF4444'};font-weight:600;">{ph['status']}</span>
-                &nbsp;&bull;&nbsp;<span style="font-size:0.83rem;">{ph['hours']}</span><br>
-                <span style="color:#0A2F6C;font-weight:600;font-size:0.9rem;">{ph['distance']} от вас</span>
-</div>`, {{maxWidth: 240}})
-            .bindTooltip("{ph['name']}", {{permanent: false}});
-            """
+        selected_pharmacy = st.session_state.get('selected_pharmacy_name', None)
 
-        map_html = f"""
-        <!DOCTYPE html><html><head>
-        <meta charset="utf-8">
-        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-        <style>body{{margin:0;padding:0;}} #map{{width:100%;height:380px;border-radius:10px;}}</style>
-        </head><body>
-        <div id="map"></div>
-        <script>
-            var map = L.map('map').setView([55.7570, 37.6190], 14);
-            L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
-                attribution: '&copy; OpenStreetMap',
-                maxZoom: 19
-            }}).addTo(map);
-            {markers_js}
-        </script>
-        </body></html>
-        """
-        st.components.v1.html(map_html, height=390, scrolling=False)
-
-        st.markdown("<div style='margin-top:1rem;'></div>", unsafe_allow_html=True)
-
-        # ---- Карточки аптек ----
         for ph in pharmacies:
             status_color = "#22C55E" if ph["status"] == "Открыто" else "#EF4444"
+            is_selected = selected_pharmacy == ph["name"]
+            border_style = "3px solid #0A2F6C" if is_selected else "1px solid #E2E8F0"
+            bg_style = "#EFF6FF" if is_selected else "white"
+
             st.markdown(f"""
-            <div class="pharmacy-card">
+            <div style="background:{bg_style};border:{border_style};border-radius:10px;
+                        padding:0.9rem 1.2rem;margin-bottom:0.3rem;">
                 <div style="display:flex;justify-content:space-between;align-items:center;">
                     <div>
-                        <strong>{ph['name']}</strong>&nbsp;
-                        <span style="color:{status_color};font-size:0.8rem;font-weight:600;">{ph['status']}</span><br>
-                        <span style="color:#6B7280;font-size:0.85rem;">{ph['address']}</span><br>
-                        <span style="color:#9CA3AF;font-size:0.82rem;">Работает: {ph['hours']}</span>
-</div>
+                        <strong style="color:#0A2F6C;">{ph['name']}</strong>
+                        <span style="color:{status_color};font-size:0.8rem;font-weight:600;margin-left:0.5rem;">{ph['status']}</span><br>
+                        <span style="color:#6B7280;font-size:0.83rem;">{ph['address']} · {ph['hours']}</span>
+                    </div>
                     <div style="text-align:right;">
-                        <div style="font-size:1.1rem;font-weight:700;color:#0A2F6C;">{ph['distance']}</div>
-                        <div style="font-size:0.8rem;color:#9CA3AF;">от вас</div>
-</div>
-</div>
-</div>
+                        <div style="font-size:1.05rem;font-weight:700;color:#0A2F6C;">{ph['distance']}</div>
+                    </div>
+                </div>
+            </div>
             """, unsafe_allow_html=True)
-            col1, col2 = st.columns(2)
-            with col1:
-                st.button("Проверить наличие", key=f"check_{ph['name']}", use_container_width=True)
-            with col2:
-                st.button("Заказать здесь", key=f"order_ph_{ph['name']}", use_container_width=True)
+
+            col_check, col_order = st.columns(2)
+            with col_check:
+                if st.button("Выбрать эту аптеку", key=f"select_ph_{ph['name']}", use_container_width=True):
+                    st.session_state['selected_pharmacy_name'] = ph['name']
+                    st.session_state['selected_pharmacy_drugs'] = ph['drugs']
+                    st.rerun()
+            with col_order:
+                if ph["status"] == "Открыто":
+                    if st.button("Заказать здесь", key=f"order_ph_{ph['name']}",
+                                 use_container_width=True, type="primary"):
+                        if total_items:
+                            st.session_state['order_confirmed'] = ph['name']
+                            st.rerun()
+                        else:
+                            st.warning("Выберите препараты выше")
+
+        # Итог выбора аптеки
+        if selected_pharmacy and st.session_state.get('selected_pharmacy_drugs'):
+            st.divider()
+            ph_drugs = st.session_state['selected_pharmacy_drugs']
+            matched = [d for d in total_items if d in ph_drugs]
+            st.markdown(f"""
+            <div style="background:#F0FFF4;border:1.5px solid #86EFAC;border-radius:10px;padding:1rem 1.3rem;">
+                <div style="font-weight:700;color:#166534;margin-bottom:0.4rem;">
+                    Наличие в {selected_pharmacy}:
+                </div>
+                {''.join([f'<div style="font-size:0.88rem;color:#374151;padding:0.1rem 0;">✓ {d} — {ph_drugs[d]}</div>' for d in matched]) if matched else '<div style="color:#6B7280;">Информация о наличии уточняется</div>'}
+            </div>
+            """, unsafe_allow_html=True)
+
+        if st.session_state.get('order_confirmed'):
+            st.success(f" Заказ отправлен в {st.session_state['order_confirmed']}! Готов через 2 часа.")
+            del st.session_state['order_confirmed']
 
         st.markdown('</div>', unsafe_allow_html=True)
-    
+
     # ================================================================
     # ВКЛ 5: САМОЧУВСТВИЕ
     # ================================================================
@@ -3135,12 +3249,33 @@ def patient_dashboard():
         
         today_well_key = f"today_wellbeing_{date.today().isoformat()}"
         
-        col1, col2 = st.columns([0.7, 0.3])
-        with col1:
-            score = st.slider("Как вы себя чувствуете? (1 = очень плохо, 10 = отлично)", 1, 10, 7)
-        with col2:
-            emoji = "" if score >= 8 else "" if score >= 6 else "" if score >= 4 else ""
-            st.markdown(f"<div style='font-size:3rem;text-align:center;padding-top:0.5rem;'>{emoji}</div>", unsafe_allow_html=True)
+        # Цветовая шкала самочувствия
+        st.markdown("""
+        <div style="display:flex;gap:0;border-radius:8px;overflow:hidden;margin-bottom:0.3rem;height:18px;">
+            <div style="flex:1;background:#EF4444;"></div>
+            <div style="flex:1;background:#F87171;"></div>
+            <div style="flex:1;background:#FB923C;"></div>
+            <div style="flex:1;background:#FBBF24;"></div>
+            <div style="flex:1;background:#FCD34D;"></div>
+            <div style="flex:1;background:#A3E635;"></div>
+            <div style="flex:1;background:#86EFAC;"></div>
+            <div style="flex:1;background:#4ADE80;"></div>
+            <div style="flex:1;background:#22C55E;"></div>
+            <div style="flex:1;background:#16A34A;"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:0.75rem;color:#6B7280;margin-bottom:0.5rem;">
+            <span>Очень плохо</span><span>Нормально</span><span>Отлично</span>
+        </div>
+        """, unsafe_allow_html=True)
+        score = st.slider("Оцените самочувствие:", 1, 10, 7, label_visibility="collapsed")
+        score_label = "Отлично" if score >= 9 else "Хорошо" if score >= 7 else "Нормально" if score >= 5 else "Плохо" if score >= 3 else "Очень плохо"
+        score_color = "#16A34A" if score >= 9 else "#22C55E" if score >= 7 else "#FBBF24" if score >= 5 else "#F87171" if score >= 3 else "#EF4444"
+        st.markdown(f"""
+        <div style="text-align:center;margin-bottom:0.8rem;">
+            <span style="font-size:2rem;font-weight:700;color:{score_color};">{score}</span>
+            <span style="font-size:1rem;color:{score_color};margin-left:0.4rem;">/10 — {score_label}</span>
+        </div>
+        """, unsafe_allow_html=True)
         
         note = st.text_area("Заметки (необязательно):", placeholder="Напишите, как прошёл день...", height=70)
         
@@ -3153,7 +3288,7 @@ def patient_dashboard():
                      (pid, today_str, score, note))
             conn.commit()
             conn.close()
-            st.success(f"Оценка {score}/10 сохранена! {emoji}")
+            st.success(f"Оценка {score}/10 сохранена! ")
             st.rerun()
         
         st.divider()
@@ -3205,54 +3340,77 @@ def patient_dashboard():
             st.plotly_chart(fig, use_container_width=True)
             
             # Связь препараты — самочувствие
-            st.subheader(" Как препараты влияют на самочувствие")
-            st.caption("Примерный анализ: сравнение дней приёма и без приёма")
-            
+            st.subheader("Влияние препаратов на самочувствие")
+            st.caption("Сравнение среднего самочувствия в дни приёма и без приёма (реальные данные из журнала)")
+
             if prescriptions:
                 correlation_data = []
-                for presc in prescriptions[:4]: # Берём первые 4 для наглядности
+                for presc in prescriptions:
                     intake_dates_p = set(get_intake_dates_for_prescription(presc[0]))
-                    
                     well_with = []
                     well_without = []
-                    
                     for _, row in df_well.iterrows():
                         d_str = row["date"].strftime("%Y-%m-%d")
                         if d_str in intake_dates_p:
                             well_with.append(row["score"])
                         else:
                             well_without.append(row["score"])
-                    
-                    avg_with = round(sum(well_with)/len(well_with), 1) if well_with else 0
-                    avg_without = round(sum(well_without)/len(well_without), 1) if well_without else 0
-                    
-                    correlation_data.append({
-                        "Препарат": presc[1],
-                        "При приёме": avg_with,
-                        "Без приёма": avg_without
-                    })
-                
-                df_corr = pd.DataFrame(correlation_data)
-                
-                fig_corr = go.Figure()
-                fig_corr.add_trace(go.Bar(
-                    x=df_corr["Препарат"], y=df_corr["При приёме"],
-                    name="Самочувствие при приёме",
-                    marker_color="#0A2F6C"
-                ))
-                fig_corr.add_trace(go.Bar(
-                    x=df_corr["Препарат"], y=df_corr["Без приёма"],
-                    name="Самочувствие без приёма",
-                    marker_color="#93C5FD"
-                ))
-                fig_corr.update_layout(
-                    barmode="group",
-                    title="Среднее самочувствие: с препаратом vs без",
-                    yaxis=dict(range=[0, 10], title="Средняя оценка"),
-                    height=350,
-                    legend=dict(orientation="h")
-                )
-                st.plotly_chart(fig_corr, use_container_width=True)
+                    avg_with = round(sum(well_with)/len(well_with), 1) if well_with else None
+                    avg_without = round(sum(well_without)/len(well_without), 1) if well_without else None
+                    diff = round(avg_with - avg_without, 1) if (avg_with and avg_without) else 0
+                    if avg_with and avg_without:
+                        correlation_data.append({
+                            "Препарат": presc[1],
+                            "При приёме": avg_with,
+                            "Без приёма": avg_without,
+                            "Разница": diff
+                        })
+
+                if correlation_data:
+                    # Сортируем по наибольшей разнице — берём 3 самых интересных
+                    correlation_data.sort(key=lambda x: abs(x["Разница"]), reverse=True)
+                    top3 = correlation_data[:3]
+                    df_corr = pd.DataFrame(top3)
+
+                    fig_corr = go.Figure()
+                    fig_corr.add_trace(go.Bar(
+                        x=df_corr["Препарат"], y=df_corr["При приёме"],
+                        name="При приёме",
+                        marker_color="#0A2F6C",
+                        text=df_corr["При приёме"],
+                        textposition="outside"
+                    ))
+                    fig_corr.add_trace(go.Bar(
+                        x=df_corr["Препарат"], y=df_corr["Без приёма"],
+                        name="Без приёма",
+                        marker_color="#93C5FD",
+                        text=df_corr["Без приёма"],
+                        textposition="outside"
+                    ))
+                    fig_corr.update_layout(
+                        barmode="group",
+                        title="Топ-3 препарата по влиянию на самочувствие",
+                        yaxis=dict(range=[0, 11], title="Средняя оценка (1-10)"),
+                        height=360,
+                        legend=dict(orientation="h", y=1.12),
+                        plot_bgcolor="#FAFBFC",
+                        paper_bgcolor="#FAFBFC"
+                    )
+                    st.plotly_chart(fig_corr, use_container_width=True)
+
+                    # Мини-таблица с разницей
+                    for row in top3:
+                        diff_v = row["Разница"]
+                        diff_color = "#22C55E" if diff_v > 0 else "#EF4444" if diff_v < 0 else "#6B7280"
+                        diff_sign = "+" if diff_v > 0 else ""
+                        st.markdown(f"""
+                        <div style="display:flex;justify-content:space-between;align-items:center;
+                                    background:#F8FAFC;border-radius:8px;padding:0.5rem 1rem;
+                                    margin-bottom:0.4rem;border:1px solid #E2E8F0;">
+                            <span style="font-weight:600;color:#0A2F6C;">{row['Препарат']}</span>
+                            <span style="color:{diff_color};font-weight:700;">{diff_sign}{diff_v} баллов при приёме</span>
+                        </div>
+                        """, unsafe_allow_html=True)
         else:
             st.info("Нет данных о самочувствии. Начните отслеживать уже сегодня!")
         
@@ -3320,7 +3478,7 @@ def patient_dashboard():
         # ================================================================
         # КАЛЬКУЛЯТОР: проверка комбинации препаратов
         # ================================================================
-        st.markdown("**Проверка взаимодействия препаратов**")
+        st.markdown("<h4 style='color:#0A2F6C;'>Проверка взаимодействия препаратов</h4>", unsafe_allow_html=True)
         st.caption("Выберите один или несколько препаратов из списка назначенных и нажмите «Проверить»— ассистент покажет все пары и их взаимодействие.")
 
         if assigned_drugs:
@@ -3436,8 +3594,8 @@ def patient_dashboard():
     # ВКЛ 7: ИИ АССИСТЕНТ
     # ================================================================
     elif patient_tab == " Ассистент":
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        
+        # Чат с ИИ-ассистентом (без лишней обёртки card)
+        # Чат с ИИ-ассистентом
         # Подготавливаем данные пациента для ассистента
         patient_info = {
             "name": full_name,
@@ -3449,8 +3607,8 @@ def patient_dashboard():
         # Вызываем чат с ассистентом
         ai_assistant_chat(pid, patient_info)
         
-        st.markdown('</div>', unsafe_allow_html=True)
-    
+        # end assistant tab
+        # end assistant tab
     render_footer()
 
 # ========================== ВХОД ==========================
