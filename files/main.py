@@ -842,8 +842,8 @@ def doctor_chat_page():
                 <div>
                     <div>{msg}</div>
                     <div style="font-size: 0.7rem; opacity: 0.7; margin-top: 0.25rem;">{time_str}</div>
-                </div>
-            </div>
+</div>
+</div>
             """, unsafe_allow_html=True)
         else:
             st.markdown(f"""
@@ -851,8 +851,8 @@ def doctor_chat_page():
                 <div>
                     <div><strong>{sender}</strong><br>{msg}</div>
                     <div style="font-size: 0.7rem; opacity: 0.7; margin-top: 0.25rem;">{time_str}</div>
-                </div>
-            </div>
+</div>
+</div>
             """, unsafe_allow_html=True)
     
     st.divider()
@@ -912,7 +912,7 @@ def patient_prescription_history():
             Частота: {regularity}<br>
             Период: {start_date} - {end_date}<br>
             <span style="color: {status_color}; font-weight: bold;">Статус: {status}</span>
-        </div>
+</div>
         """, unsafe_allow_html=True)
     
     st.divider()
@@ -1192,150 +1192,196 @@ def polypharmacy_analysis():
     if not pid:
         st.session_state['page'] = 'doctor_dashboard'
         st.rerun()
-    
+
     patient, prescriptions = get_patient_by_id(pid)
     full_name = f"{patient[1]} {patient[2]}"
-    
+
     render_breadcrumb([f"Анализ полипрагмазии: {full_name}"])
-    
-    st.markdown(f'<div class="card"><div class="card-header">Анализ полипрагмазии пациента: {full_name}</div>', unsafe_allow_html=True)
-    
-    if st.button("Вернуться к редактированию"):
+
+    st.markdown(f'''<div class="card"><div class="card-header"> Анализ полипрагмазии — {full_name}</div>''', unsafe_allow_html=True)
+
+    if st.button("← Вернуться к пациенту"):
         st.session_state['page'] = 'doctor_edit'
         st.rerun()
-    
+
     st.divider()
-    
+
     analysis = analyze_polypharmacy(pid)
     num_drugs = analysis['num_drugs']
     age = analysis['age']
     risk_level = analysis['risk_level']
     interactions = analysis['interactions']
-    
-    risk_colors = {
-        'low': ('#D4EDDA', '#28A745'),
-        'medium': ('#FFF3CD', '#FFC107'),
-        'high': ('#F8D7DA', '#DC3545'),
-        'critical': ('#F8D7DA', '#DC3545')
+
+    risk_config = {
+        'low':      ('#D4EDDA', '#28A745', '', 'Низкий риск',       'Текущая терапия в пределах нормы'),
+        'medium':   ('#FFF3CD', '#E6A817', '', 'Средний риск',      'Рекомендуется мониторинг взаимодействий'),
+        'high':     ('#F8D7DA', '#DC3545', '', 'Высокий риск',      'Требуется пересмотр схемы лечения'),
+        'critical': ('#F8D7DA', '#9B1C1C', '', 'Критический риск',  'Немедленная консультация фармаколога'),
     }
-    
-    risk_labels = {
-        'low': 'Низкий риск',
-        'medium': 'Средний риск',
-        'high': 'Высокий риск',
-        'critical': 'Критический риск'
-    }
-    
-    bg_color, border_color = risk_colors.get(risk_level, ('#F0F4FA', '#0A2F6C'))
-    
+    bg_color, border_color, icon, label, tip = risk_config.get(risk_level, ('#F0F4FA', '#0A2F6C', 'ℹ', 'Неизвестно', ''))
+
+    #  Шкала риска 
+    risk_levels_order = ['low', 'medium', 'high', 'critical']
+    risk_pct = (risk_levels_order.index(risk_level) + 1) * 25
+    bar_color = border_color
+
     st.markdown(f"""
-    <div style="background-color: {bg_color}; border-left: 4px solid {border_color}; padding: 1rem; margin-bottom: 1rem; border-radius: 4px;">
-        <strong>Возраст:</strong> {age} лет<br>
-        <strong>Количество препаратов:</strong> {num_drugs}<br>
-        <strong style="color: {border_color};">Уровень риска: {risk_labels[risk_level]}</strong>
-    </div>
+    <div style="background:{bg_color};border-left:5px solid {border_color};border-radius:8px;padding:1.2rem 1.5rem;margin-bottom:1.2rem;">
+        <div style="display:flex;align-items:center;gap:0.7rem;margin-bottom:0.6rem;">
+            <span style="font-size:1.8rem;">{icon}</span>
+            <div>
+                <div style="font-size:1.1rem;font-weight:700;color:{border_color};">{label}</div>
+                <div style="font-size:0.85rem;color:#4B5563;">{tip}</div>
+</div>
+</div>
+        <div style="display:flex;gap:2rem;flex-wrap:wrap;margin-top:0.5rem;">
+            <div><span style="color:#6B7280;font-size:0.85rem;">Возраст</span><br><strong style="font-size:1.1rem;">{age} лет</strong></div>
+            <div><span style="color:#6B7280;font-size:0.85rem;">Препаратов</span><br><strong style="font-size:1.1rem;">{num_drugs}</strong></div>
+            <div><span style="color:#6B7280;font-size:0.85rem;">Взаимодействий</span><br><strong style="font-size:1.1rem;">{len(interactions)}</strong></div>
+</div>
+        <div style="margin-top:0.8rem;">
+            <div style="font-size:0.8rem;color:#6B7280;margin-bottom:0.3rem;">Уровень риска</div>
+            <div style="background:#E5E7EB;border-radius:6px;height:10px;overflow:hidden;">
+                <div style="width:{risk_pct}%;background:{bar_color};height:100%;border-radius:6px;transition:width 0.5s;"></div>
+</div>
+</div>
+</div>
     """, unsafe_allow_html=True)
-    
+
+    #  Что такое полипрагмазия — информационный блок 
+    st.markdown("""
+    <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:1rem 1.3rem;margin-bottom:1.2rem;">
+        <div style="font-weight:600;color:#1D4ED8;margin-bottom:0.4rem;">ℹ Что такое полипрагмазия?</div>
+        <div style="font-size:0.88rem;color:#374151;line-height:1.6;">
+        Полипрагмазия — одновременное назначение пяти и более лекарственных препаратов. 
+        У пациентов старше 65 лет критический порог снижается до 4 препаратов. 
+        Риск нежелательных лекарственных реакций при полипрагмазии возрастает в 3–4 раза 
+        по сравнению с монотерапией.
+</div>
+</div>
+    """, unsafe_allow_html=True)
+
     st.divider()
-    
-    st.subheader("Назначенные препараты")
+
+    #  Назначенные препараты 
+    st.subheader(" Назначенные препараты")
+    cols_header = st.columns([2.5, 1.2, 2, 1.5, 1.5])
+    for col, h in zip(cols_header, ["Препарат", "Доза", "Режим приёма", "Дата начала", "Дата окончания"]):
+        col.markdown(f"<span style='font-weight:600;color:#0A2F6C;font-size:0.85rem;'>{h}</span>", unsafe_allow_html=True)
+    st.markdown("<hr style='margin:0.3rem 0 0.5rem 0;border-color:#DCE5F0;'>", unsafe_allow_html=True)
+
     for presc in prescriptions:
-        st.markdown(f"**{presc[1]}** ({presc[2]}) - {presc[3]}")
-    
+        cols_row = st.columns([2.5, 1.2, 2, 1.5, 1.5])
+        cols_row[0].markdown(f"**{presc[1]}**")
+        cols_row[1].write(presc[2])
+        cols_row[2].write(presc[3])
+        cols_row[3].write(presc[4])
+        cols_row[4].write(presc[5])
+
     st.divider()
-    
+
+    #  Взаимодействия 
     if interactions:
-        st.subheader("Выявленные взаимодействия")
+        st.subheader(f" Выявленные взаимодействия ({len(interactions)})")
+        severity_cfg = {
+            'low':    ('#D4EDDA', '#28A745', 'Слабое',   ''),
+            'medium': ('#FFF3CD', '#E6A817', 'Среднее',  ''),
+            'high':   ('#F8D7DA', '#DC3545', 'Сильное',  ''),
+        }
         for interaction in interactions:
-            severity_color = {
-                'low': '#D4EDDA',
-                'medium': '#FFF3CD',
-                'high': '#F8D7DA'
-            }.get(interaction['severity'], '#F0F4FA')
-            
-            severity_label = {
-                'low': 'Слабое взаимодействие',
-                'medium': 'Среднее взаимодействие',
-                'high': 'Сильное взаимодействие'
-            }.get(interaction['severity'], 'Неизвестное')
-            
+            s = interaction['severity']
+            sc, sb, sl, si = severity_cfg.get(s, ('#F0F4FA', '#0A2F6C', 'Неизвестное', 'ℹ'))
             st.markdown(f"""
-            <div style="background-color: {severity_color}; border-left: 4px solid; padding: 1rem; margin-bottom: 1rem; border-radius: 4px;">
-                <strong>{interaction['drug1']}</strong> + <strong>{interaction['drug2']}</strong><br>
-                <strong>Тип:</strong> {severity_label}<br>
-                <strong>Описание:</strong> {interaction['description']}
-            </div>
+            <div style="background:{sc};border-left:4px solid {sb};border-radius:6px;padding:0.9rem 1.2rem;margin-bottom:0.8rem;">
+                <div style="font-size:1rem;font-weight:700;margin-bottom:0.3rem;">
+                    {si} {interaction['drug1']} + {interaction['drug2']}
+</div>
+                <div style="display:flex;gap:1rem;flex-wrap:wrap;">
+                    <span style="background:{sb};color:white;border-radius:4px;padding:0.15rem 0.5rem;font-size:0.8rem;">{sl}</span>
+</div>
+                <div style="margin-top:0.5rem;font-size:0.88rem;color:#374151;">{interaction['description']}</div>
+</div>
             """, unsafe_allow_html=True)
     else:
-        st.info("Значительных взаимодействий между препаратами не выявлено")
-    
+        st.markdown("""
+        <div style="background:#D4EDDA;border-left:4px solid #28A745;border-radius:6px;padding:1rem 1.2rem;">
+             <strong>Значимых лекарственных взаимодействий не выявлено</strong>
+</div>
+        """, unsafe_allow_html=True)
+
     st.divider()
-    
-    st.subheader("Графический анализ")
-    
-    freqs = {}
-    for presc in prescriptions:
-        freq = presc[3]
-        freqs[freq] = freqs.get(freq, 0) + 1
-    
-    if freqs:
-        fig1 = px.bar(
-            x=list(freqs.keys()),
-            y=list(freqs.values()),
-            labels={'x': 'Частота приема', 'y': 'Количество препаратов'},
-            title="Распределение препаратов по частоте приема"
-        )
-        fig1.update_traces(marker_color='#0A2F6C')
-        st.plotly_chart(fig1, use_container_width=True)
-    
-    age_groups = {
-        'Молодые (до 40)': 0,
-        'Средний возраст (40-65)': 0,
-        'Пожилые (65+)': 0
-    }
-    
-    if age < 40:
-        age_groups['Молодые (до 40)'] = num_drugs
-    elif age < 65:
-        age_groups['Средний возраст (40-65)'] = num_drugs
-    else:
-        age_groups['Пожилые (65+)'] = num_drugs
-    
-    fig2 = px.pie(
-        values=[v for v in age_groups.values() if v > 0],
-        names=[k for k, v in age_groups.items() if v > 0],
-        title="Позиционирование по возрастной группе"
-    )
-    st.plotly_chart(fig2, use_container_width=True)
-    
+
+    #  Графики 
+    st.subheader(" Визуальный анализ")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        freqs = {}
+        for presc in prescriptions:
+            freq = presc[3]
+            freqs[freq] = freqs.get(freq, 0) + 1
+        if freqs:
+            fig1 = px.bar(x=list(freqs.keys()), y=list(freqs.values()),
+                          labels={'x': 'Режим приёма', 'y': 'Кол-во препаратов'},
+                          title="Режимы приёма")
+            fig1.update_traces(marker_color='#0A2F6C')
+            fig1.update_layout(height=300, showlegend=False)
+            st.plotly_chart(fig1, use_container_width=True)
+
+    with col2:
+        threshold = 4 if age >= 65 else 5
+        fig_gauge = go.Figure(go.Indicator(
+            mode="gauge+number",
+            value=num_drugs,
+            title={'text': f"Препаратов (порог: {threshold})", 'font': {'size': 13}},
+            gauge={
+                'axis': {'range': [0, max(num_drugs + 2, threshold + 3)]},
+                'bar': {'color': border_color},
+                'steps': [
+                    {'range': [0, threshold], 'color': '#D4EDDA'},
+                    {'range': [threshold, max(num_drugs + 2, threshold + 3)], 'color': '#F8D7DA'},
+                ],
+                'threshold': {'line': {'color': '#DC3545', 'width': 3}, 'value': threshold}
+            }
+        ))
+        fig_gauge.update_layout(height=300)
+        st.plotly_chart(fig_gauge, use_container_width=True)
+
     st.divider()
-    
-    st.subheader("Рекомендации")
-    
+
+    #  Рекомендации 
+    st.subheader(" Рекомендации")
     recommendations = []
-    
     if risk_level in ['high', 'critical']:
-        recommendations.append("Рассмотрите возможность уменьшения количества препаратов")
-        recommendations.append("Обратитесь к клиническому фармакологу для оптимизации терапии")
-    
-    if age >= 65 and num_drugs >= 5:
-        recommendations.append("Для пожилого пациента количество препаратов выше рекомендуемого")
-        recommendations.append("Проведите переоценку необходимости каждого препарата")
-    
+        recommendations.append(("", "Рассмотрите возможность уменьшения количества препаратов"))
+        recommendations.append(("", "Обратитесь к клиническому фармакологу для оптимизации терапии"))
+    if age >= 65 and num_drugs >= 4:
+        recommendations.append(("", "Для пожилого пациента количество препаратов выше рекомендуемого — проведите переоценку"))
     if interactions:
-        recommendations.append("Обратите внимание на выявленные взаимодействия")
-        recommendations.append("Рассмотрите замену одного из взаимодействующих препаратов")
-    
-    if recommendations:
-        for i, rec in enumerate(recommendations, 1):
-            st.markdown(f"**{i}.** {rec}")
+        hi = [i for i in interactions if i['severity'] == 'high']
+        if hi:
+            recommendations.append(("", f"Обнаружено {len(hi)} сильных взаимодействий — рассмотрите замену препаратов"))
+        else:
+            recommendations.append(("", "Обратите внимание на выявленные взаимодействия при корректировке терапии"))
+    if not recommendations:
+        st.markdown("""
+        <div style="background:#D4EDDA;border-left:4px solid #28A745;border-radius:6px;padding:1rem 1.2rem;">
+             <strong>Специальных рекомендаций не требуется. Терапия в норме.</strong>
+</div>
+        """, unsafe_allow_html=True)
     else:
-        st.info("Специальных рекомендаций не требуется")
-    
+        for icon_r, rec in recommendations:
+            st.markdown(f"""
+            <div style="background:#FFF8F0;border-left:4px solid #F59E0B;border-radius:6px;padding:0.7rem 1rem;margin-bottom:0.5rem;font-size:0.9rem;">
+                {icon_r} {rec}
+</div>
+            """, unsafe_allow_html=True)
+
     st.markdown('</div>', unsafe_allow_html=True)
     render_footer()
 
-# ========================== ДАШБОРД ПАЦИЕНТА (для врача) ==========================
+
 def patient_dashboard_doctor():
     pid = st.session_state.get('dashboard_patient_id')
     if not pid:
@@ -1385,7 +1431,7 @@ def patient_dashboard_doctor():
         <div class="patient-metric-card">
             <div class="patient-metric-value">{num_drugs}</div>
             <div class="patient-metric-label">Активных препаратов</div>
-        </div>
+</div>
         """, unsafe_allow_html=True)
     with col2:
         adh_color = "#22C55E" if adherence_pct >= 80 else ("#F59E0B" if adherence_pct >= 50 else "#EF4444")
@@ -1393,7 +1439,7 @@ def patient_dashboard_doctor():
         <div class="patient-metric-card">
             <div class="patient-metric-value" style="color:{adh_color};">{adherence_pct}%</div>
             <div class="patient-metric-label">Приверженность (30 дней)</div>
-        </div>
+</div>
         """, unsafe_allow_html=True)
     with col3:
         well_color = "#22C55E" if avg_wellbeing >= 7 else ("#F59E0B" if avg_wellbeing >= 5 else "#EF4444")
@@ -1401,7 +1447,7 @@ def patient_dashboard_doctor():
         <div class="patient-metric-card">
             <div class="patient-metric-value" style="color:{well_color};">{avg_wellbeing}/10</div>
             <div class="patient-metric-label">Среднее самочувствие</div>
-        </div>
+</div>
         """, unsafe_allow_html=True)
     with col4:
         total_intakes = len(df_intake)
@@ -1409,7 +1455,7 @@ def patient_dashboard_doctor():
         <div class="patient-metric-card">
             <div class="patient-metric-value">{total_intakes}</div>
             <div class="patient-metric-label">Всего приёмов за историю</div>
-        </div>
+</div>
         """, unsafe_allow_html=True)
     
     st.markdown("<br>", unsafe_allow_html=True)
@@ -1610,7 +1656,7 @@ def patient_dashboard_doctor():
                         st.markdown(f"""
                         <div style="background:#EFF6FF;border-radius:6px;padding:0.5rem 0.8rem;margin-bottom:0.4rem;font-size:0.85rem;border-left:3px solid #3B82F6;">
                              {d}
-                        </div>
+</div>
                         """, unsafe_allow_html=True)
                 else:
                     st.markdown("<span style='color:#9CA3AF;font-size:0.85rem;'>Нет приёмов</span>", unsafe_allow_html=True)
@@ -1709,7 +1755,7 @@ def patient_dashboard_doctor():
                 st.markdown(f"""
                 <div style="background:#FFF0F0;border-left:3px solid #EF4444;padding:0.8rem;border-radius:4px;margin-top:0.5rem;">
                      <strong>Противопоказания:</strong> {patient[6]}
-                </div>
+</div>
                 """, unsafe_allow_html=True)
         
         with col2:
@@ -1964,7 +2010,7 @@ def drug_analytics_dashboard():
              <strong>Вывод:</strong> Самый назначаемый препарат — <strong>{top_drugs.iloc[0]['Препарат']}</strong> 
             ({top_drugs.iloc[0]['Назначений']} назначений). 
             Первые 3 препарата составляют {round(top_drugs.head(3)['Назначений'].sum()/len(df)*100, 1)}% всех назначений.
-        </div>
+</div>
         """, unsafe_allow_html=True)
     
     with tab2:
@@ -2118,7 +2164,7 @@ def drug_analytics_dashboard():
              <strong>Вывод:</strong> {freq_counts.iloc[0]['Режим']} — наиболее популярный режим приёма 
             ({round(freq_counts.iloc[0]['Назначений']/len(df)*100, 1)}% назначений).
             Одноразовые режимы улучшают приверженность пациентов.
-        </div>
+</div>
         """, unsafe_allow_html=True)
     
     with tab5:
@@ -2242,7 +2288,7 @@ def drug_analytics_dashboard():
         <div style="background:#FFF0F0;border-left:4px solid #EF4444;padding:1rem;border-radius:4px;margin-top:1rem;">
              <strong>Внимание:</strong> {high_risk_count} пациентов принимают 7+ препаратов одновременно. 
             Рекомендуется консультация клинического фармаколога.
-        </div>
+</div>
         """, unsafe_allow_html=True)
     
     with tab7:
@@ -2451,8 +2497,8 @@ def ai_assistant_chat(pid, patient_data):
             <div>
                 <div style="font-weight: 700; font-size: 0.9rem;">Медицинский ассистент</div>
                 <div style="font-size: 0.72rem; opacity: 0.8;">Отвечает на вопросы о препаратах</div>
-            </div>
-        </div>
+</div>
+</div>
     """, unsafe_allow_html=True)
 
     # ---- Приветствие при первом входе ----
@@ -2560,7 +2606,7 @@ def patient_dashboard():
         <div style="font-size: 0.85rem; opacity: 0.8; margin-bottom: 0.3rem;">Личный кабинет пациента</div>
         <div style="font-size: 1.5rem; font-weight: 700;">{full_name}</div>
         <div style="font-size: 0.9rem; opacity: 0.8;">{age} лет · Полис: {patient[4]}</div>
-    </div>
+</div>
     """, unsafe_allow_html=True)
     
     with st.sidebar:
@@ -2609,21 +2655,21 @@ def patient_dashboard():
                     box-shadow:0 2px 8px rgba(10,47,108,0.1);">
             <div style="font-size:1.1rem;font-weight:700;color:#0A2F6C;margin-bottom:0.5rem;">
                 Получение препаратов в аптеке
-            </div>
+</div>
             <div style="font-size:0.95rem;line-height:1.5;margin-bottom:0.7rem;">
                 Покажите QR-код или назовите код
                 <strong style="font-size:1.25rem;background:#FFFFFF;padding:0.15rem 0.7rem;
                               border-radius:20px;letter-spacing:1px;">{daily_code_qr}</strong><br>
                 фармацевту, чтобы получить ваши лекарства.
-            </div>
+</div>
             <div style="display:flex;justify-content:center;margin:0.4rem 0;">
                 {qr_html_top}
-            </div>
+</div>
             <div style="font-size:0.8rem;color:#4B5563;margin-top:0.4rem;">
                 Код обновляется каждую ночь в 00:00<br>
                 Актуально на сегодня: <strong>{date.today().strftime('%d.%m.%Y')}</strong>
-            </div>
-        </div>
+</div>
+</div>
         """, unsafe_allow_html=True)
         # ========== КОНЕЦ QR-БЛОКА ==========
 
@@ -2655,16 +2701,16 @@ def patient_dashboard():
                     <div style="display:flex;justify-content:space-between;align-items:flex-start;">
                         <div class="drug-name"> {drug_name}</div>
                         {status_badge}
-                    </div>
+</div>
                     <div class="drug-detail"> <b>Дозировка:</b> {dosage}</div>
                     <div class="drug-detail"> <b>Режим приёма:</b> {regularity}</div>
                     <div class="drug-detail"> <b>Связь с едой:</b> {food_relation}</div>
                     <div class="drug-detail"> <b>Период:</b> {start_date} — {end_date}</div>
-                    <div class="drug-detail">🩺 <b>Причина назначения:</b> {indication}</div>
+                    <div class="drug-detail"> <b>Причина назначения:</b> {indication}</div>
                     <div class="drug-detail"> <b>Как принимать:</b> {instructions}</div>
                     <div class="drug-detail"> <b>Особые указания:</b> {special_notes}</div>
                     {contra_warning}
-                </div>
+</div>
                 """, unsafe_allow_html=True)
                 
                 with st.expander(f" Инструкция по применению: {drug_name}"):
@@ -2692,7 +2738,7 @@ def patient_dashboard():
                 <div style="background:#FFF0F0;border-left:4px solid #EF4444;padding:1rem;border-radius:6px;margin-top:1rem;">
                      <strong>Ваши противопоказания и аллергии:</strong><br>{contraindications}
                     <br><small>Сообщите об этом врачу при любом новом назначении.</small>
-                </div>
+</div>
                 """, unsafe_allow_html=True)
 
         
@@ -2733,7 +2779,7 @@ def patient_dashboard():
                                     padding:0.35rem 0.1rem;text-align:center;
                                     font-size:0.78rem;font-weight:700;cursor:default;">
                             {day_names_short[i]}<br>{d.day}
-                        </div>""", unsafe_allow_html=True)
+</div>""", unsafe_allow_html=True)
                 else:
                     label_style = "font-weight:700;color:#0A2F6C;" if is_today else "color:#374151;"
                     if st.button(f"{day_names_short[i]}\n{d.day}", key=f"sched_day_{d.isoformat()}",
@@ -2792,7 +2838,7 @@ def patient_dashboard():
                                 margin-bottom:0.4rem;border-left:4px solid #0A2F6C;">
                         <strong style="color:#0A2F6C;font-size:0.95rem;">{slot_time}</strong>
                         &nbsp;<span style="color:#6B7280;font-size:0.85rem;">{slot_name}</span>
-                    </div>
+</div>
                 """, unsafe_allow_html=True)
 
                 for presc in slot_drugs:
@@ -2817,11 +2863,11 @@ def patient_dashboard():
                                     margin-bottom:0.15rem;">
                             <div style="font-weight:600;font-size:0.92rem;color:#1E293B;">
                                 {presc[1]} <span style="font-weight:400;color:#6B7280;font-size:0.85rem;">{presc[2]}</span>
-                            </div>
+</div>
                             <div style="font-size:0.8rem;color:{status_col};font-weight:600;margin-top:0.15rem;">{status_txt}</div>
                             {f'<div style="font-size:0.78rem;color:#64748B;margin-top:0.2rem;">Связь с едой: {food_rel}</div>' if food_rel and food_rel != "—" else ''}
                             {f'<div style="font-size:0.78rem;color:#64748B;">Назначен: {indication}</div>' if indication and indication != "—" else ''}
-                        </div>
+</div>
                         """, unsafe_allow_html=True)
                     with col_action:
                         if not is_taken:
@@ -2910,7 +2956,7 @@ def patient_dashboard():
             },
             {
                 "doctor": "Терапевт",
-                "icon": "🩺",
+                "icon": "",
                 "date": "1 мая 2026",
                 "color": "#FFF7ED",
                 "border": "#F59E0B",
@@ -2944,7 +2990,7 @@ def patient_dashboard():
                 <div style="background:#F8FAFC;border-radius:8px;padding:0.8rem 1rem;margin-bottom:0.6rem;border:1px solid #E2E8F0;">
                     <strong>{sender}</strong> <span style="color:#9CA3AF;font-size:0.8rem;">{time_str}</span><br>
                     {msg}
-                </div>
+</div>
                 """, unsafe_allow_html=True)
         else:
             st.info("Нет сообщений от врача")
@@ -3026,7 +3072,7 @@ def patient_dashboard():
                 <span style="color:{ph['status'] == 'Открыто' and '#22C55E' or '#EF4444'};font-weight:600;">{ph['status']}</span>
                 &nbsp;&bull;&nbsp;<span style="font-size:0.83rem;">{ph['hours']}</span><br>
                 <span style="color:#0A2F6C;font-weight:600;font-size:0.9rem;">{ph['distance']} от вас</span>
-            </div>`, {{maxWidth: 240}})
+</div>`, {{maxWidth: 240}})
             .bindTooltip("{ph['name']}", {{permanent: false}});
             """
 
@@ -3063,13 +3109,13 @@ def patient_dashboard():
                         <span style="color:{status_color};font-size:0.8rem;font-weight:600;">{ph['status']}</span><br>
                         <span style="color:#6B7280;font-size:0.85rem;">{ph['address']}</span><br>
                         <span style="color:#9CA3AF;font-size:0.82rem;">Работает: {ph['hours']}</span>
-                    </div>
+</div>
                     <div style="text-align:right;">
                         <div style="font-size:1.1rem;font-weight:700;color:#0A2F6C;">{ph['distance']}</div>
                         <div style="font-size:0.8rem;color:#9CA3AF;">от вас</div>
-                    </div>
-                </div>
-            </div>
+</div>
+</div>
+</div>
             """, unsafe_allow_html=True)
             col1, col2 = st.columns(2)
             with col1:
@@ -3246,7 +3292,7 @@ def patient_dashboard():
                         text-align:center;border:1px solid #E2E8F0;">
                 <div style="font-size:2rem;font-weight:700;color:#0A2F6C;">{num_drugs}</div>
                 <div style="font-size:0.82rem;color:#6B7280;margin-top:0.2rem;">Назначенных</div>
-            </div>""", unsafe_allow_html=True)
+</div>""", unsafe_allow_html=True)
         with c2:
             n_comb = num_drugs * (num_drugs - 1) // 2 if num_drugs > 1 else 0
             st.markdown(f"""
@@ -3254,20 +3300,20 @@ def patient_dashboard():
                         text-align:center;border:1px solid #E2E8F0;">
                 <div style="font-size:2rem;font-weight:700;color:#0A2F6C;">{n_comb}</div>
                 <div style="font-size:0.82rem;color:#6B7280;margin-top:0.2rem;">Комбинаций</div>
-            </div>""", unsafe_allow_html=True)
+</div>""", unsafe_allow_html=True)
         with c3:
             st.markdown(f"""
             <div style="background:{bg_r};border-radius:10px;padding:1rem;
                         text-align:center;border:1px solid #dee2e6;">
                 <div style="font-size:1.15rem;font-weight:700;color:{text_r};">{label_r}</div>
                 <div style="font-size:0.82rem;color:{text_r};margin-top:0.2rem;">Риск</div>
-            </div>""", unsafe_allow_html=True)
+</div>""", unsafe_allow_html=True)
 
         st.markdown(f"""
         <div style="margin:0.8rem 0;padding:0.7rem 1rem;background:{bg_r};
                     border-radius:8px;color:{text_r};font-size:0.88rem;">
             {risk_desc.get(risk_level, '')}
-        </div>""", unsafe_allow_html=True)
+</div>""", unsafe_allow_html=True)
 
         st.divider()
 
@@ -3357,11 +3403,11 @@ def patient_dashboard():
                                             align-items:center;">
                                     <span style="font-weight:700;font-size:0.9rem;">
                                         {d1} + {d2}
-                                    </span>
+</span>
                                     <span style="font-size:0.78rem;font-weight:600;">{lbl_ix}</span>
-                                </div>
+</div>
                                 <div style="font-size:0.84rem;margin-top:0.35rem;color:#374151;">{desc}</div>
-                            </div>""", unsafe_allow_html=True)
+</div>""", unsafe_allow_html=True)
                         else:
                             no_data_pairs.append(f"{d1} + {d2}")
 
@@ -3382,7 +3428,7 @@ def patient_dashboard():
                     border-radius:8px;font-size:0.82rem;color:#0A2F6C;">
             <strong>Внимание:</strong> носит информационный характер.
             При любых опасениях обратитесь к врачу.
-        </div>""", unsafe_allow_html=True)
+</div>""", unsafe_allow_html=True)
 
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -3415,8 +3461,8 @@ def login_page():
     with col2:
         st.subheader("Вход в систему")
         
-        username = st.text_input("Логин", placeholder="врач1")
-        password = st.text_input("Пароль", type="password", placeholder="пароль")
+        username = st.text_input("Логин", placeholder="Введите логин")
+        password = st.text_input("Пароль", type="password", placeholder="Введите пароль")
         
         role = st.selectbox(
             "Роль",
