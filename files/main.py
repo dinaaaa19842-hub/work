@@ -525,7 +525,13 @@ def init_db():
         gender = "M" if i % 2 == 0 else "F"
         first_name = first_names_m[i % len(first_names_m)] if gender == "M" else first_names_f[i % len(first_names_f)]
         last_name = last_names[i % len(last_names)]
-        birth_year = 1950 + i
+        # Distribute patients across all age groups: 18-39, 40-65, 65+
+        if i < 8:
+            birth_year = 2026 - 18 - (i * 2)   # 18-32 лет
+        elif i < 18:
+            birth_year = 2026 - 40 - ((i - 8) * 2)  # 40-58 лет
+        else:
+            birth_year = 2026 - 65 - ((i - 18) * 1)  # 65-76 лет
         birth_date = f"{birth_year:04d}-{(i % 12) + 1:02d}-15"
         policy = f"{1000000000 + i}"
         location = locations[i % len(locations)]
@@ -1800,21 +1806,32 @@ def patient_dashboard_doctor():
             
             df_stats = pd.DataFrame(drug_stats)
             
-            # Пузырьковая диаграмма
-            fig_bubble = px.scatter(
-                df_stats,
-                x="Дней назначен",
-                y="Приверженность %",
-                size="Всего приёмов",
-                color="Препарат",
-                hover_data=["Дозировка", "Регулярность", "Показание"],
-                title="Препараты: длительность назначения vs приверженность",
-                size_max=50,
-                color_discrete_sequence=px.colors.qualitative.Set2
+            # Горизонтальный бар-чарт приверженности по препаратам
+            df_stats_sorted = df_stats.sort_values("Приверженность %", ascending=True)
+            bar_colors = [
+                "#22C55E" if v >= 80 else "#F59E0B" if v >= 60 else "#EF4444"
+                for v in df_stats_sorted["Приверженность %"]
+            ]
+            fig_adh = go.Figure(go.Bar(
+                x=df_stats_sorted["Приверженность %"],
+                y=df_stats_sorted["Препарат"],
+                orientation='h',
+                marker_color=bar_colors,
+                text=[f"{v}%" for v in df_stats_sorted["Приверженность %"]],
+                textposition='outside'
+            ))
+            fig_adh.add_vline(x=80, line_dash="dash", line_color="#0A2F6C",
+                              annotation_text="Целевой уровень 80%",
+                              annotation_position="top right")
+            fig_adh.update_layout(
+                title="Приверженность к лечению по препаратам",
+                xaxis=dict(range=[0, 110], title="Приверженность (%)"),
+                yaxis=dict(title=""),
+                height=max(300, len(df_stats_sorted) * 45 + 80),
+                plot_bgcolor="#FAFBFC", paper_bgcolor="#FAFBFC",
+                margin=dict(l=10, r=80, t=50, b=40)
             )
-            fig_bubble.add_hline(y=80, line_dash="dash", line_color="#22C55E", annotation_text="Целевой уровень 80%")
-            fig_bubble.update_layout(height=450)
-            st.plotly_chart(fig_bubble, use_container_width=True)
+            st.plotly_chart(fig_adh, use_container_width=True)
             
             st.markdown("<h4 style='color:#0A2F6C;'>Детальная статистика по препаратам</h4>", unsafe_allow_html=True)
             st.dataframe(
@@ -1829,11 +1846,13 @@ def patient_dashboard_doctor():
         col1, col2 = st.columns(2)
         with col1:
             st.markdown(f"""
-            ** Пациент:** {full_name} 
-            ** Возраст:** {age} лет 
-            ** Город:** {patient[5] or '—'} 
-            ** Полис:** {patient[4] or '—'} 
-            """)
+            <div style="font-size:0.92rem;line-height:2rem;">
+                <div><span style="color:#6B7280;">Пациент:</span> <strong>{full_name}</strong></div>
+                <div><span style="color:#6B7280;">Возраст:</span> <strong>{age} лет</strong></div>
+                <div><span style="color:#6B7280;">Город:</span> <strong>{patient[5] or '—'}</strong></div>
+                <div><span style="color:#6B7280;">Полис:</span> <strong>{patient[4] or '—'}</strong></div>
+            </div>
+            """, unsafe_allow_html=True)
             
             if patient[6]:
                 st.markdown(f"""
@@ -1976,7 +1995,7 @@ def doctor_patients_page():
                 st.session_state['page'] = 'doctor_chat'
                 st.rerun()
 
-            if cols[7].button("", key=f"dash_{pid}", use_container_width=True):
+            if cols[7].button("Дашборд ↗", key=f"dash_{pid}", use_container_width=True):
                 st.session_state['dashboard_patient_id'] = pid
                 st.session_state['page'] = 'patient_dashboard_doctor'
                 st.rerun()
@@ -1986,7 +2005,6 @@ def doctor_patients_page():
                 st.session_state['page'] = 'doctor_edit'
                 st.rerun()
 
-    st.markdown('</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
 # ========================== АНАЛИТИКА ВРАЧА (РАСШИРЕННАЯ) ==========================
@@ -2012,7 +2030,7 @@ def drug_analytics_dashboard():
     
     df["Возраст"] = df["Дата_рождения"].apply(calc_age)
     df["Возрастная_группа"] = df["Возраст"].apply(
-        lambda a: "До 40 лет" if a and a < 40 else ("40-65 лет" if a and a < 65 else "65+ лет")
+        lambda a: "18-39 лет" if a and a < 40 else ("40-65 лет" if a and a < 65 else "65+ лет")
     )
     
     all_patients = get_all_patients_full()
@@ -2037,13 +2055,13 @@ def drug_analytics_dashboard():
     
     # ---- Вкладки ----
     tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
-        " Топ препаратов",
-        " По возрасту",
-        " По городам",
-        "⏰ Частота приёма",
-        " Тренды",
-        " Полипрагмазия",
-        " Статистика"
+        "Топ препаратов",
+        "По возрасту",
+        "По городам",
+        "Частота приёма",
+        "Тренды",
+        "Полипрагмазия",
+        "Статистика"
     ])
     
     with tab1:
@@ -2110,7 +2128,7 @@ def drug_analytics_dashboard():
             color="Возрастная_группа",
             barmode="group",
             title="Назначения препаратов по возрастным группам",
-            color_discrete_map={"До 40 лет": "#93C5FD", "40-65 лет": "#3B82F6", "65+ лет": "#0A2F6C"},
+            color_discrete_map={"18-39 лет": "#93C5FD", "40-65 лет": "#3B82F6", "65+ лет": "#0A2F6C"},
             labels={"Возрастная_группа": "Возрастная группа"}
         )
         fig_age.update_layout(height=450, xaxis_tickangle=-30)
@@ -2123,7 +2141,7 @@ def drug_analytics_dashboard():
             fig_age_pie = px.pie(
                 age_counts, values="Назначений", names="Группа",
                 title="Доля назначений по возрасту",
-                color_discrete_map={"До 40 лет": "#93C5FD", "40-65 лет": "#3B82F6", "65+ лет": "#0A2F6C"}
+                color_discrete_map={"18-39 лет": "#93C5FD", "40-65 лет": "#3B82F6", "65+ лет": "#0A2F6C"}
             )
             st.plotly_chart(fig_age_pie, use_container_width=True)
         
@@ -2136,7 +2154,7 @@ def drug_analytics_dashboard():
                 pat_age = calc_age(pat[3])
                 if pat_age is None:
                     continue
-                grp = "До 40 лет" if pat_age < 40 else ("40-65 лет" if pat_age < 65 else "65+ лет")
+                grp = "18-39 лет" if pat_age < 40 else ("40-65 лет" if pat_age < 65 else "65+ лет")
                 _, pat_prescs = get_patient_by_id(pat[0])
                 patient_age_drugs.append({"group": grp, "n_drugs": len(pat_prescs)})
             
@@ -2150,7 +2168,7 @@ def drug_analytics_dashboard():
                     avg_by_group, x="Группа", y="Среднее препаратов",
                     title="Среднее число препаратов на пациента",
                     color="Группа",
-                    color_discrete_map={"До 40 лет": "#93C5FD", "40-65 лет": "#3B82F6", "65+ лет": "#0A2F6C"},
+                    color_discrete_map={"18-39 лет": "#93C5FD", "40-65 лет": "#3B82F6", "65+ лет": "#0A2F6C"},
                     text="Среднее препаратов"
                 )
                 fig_avg.update_traces(textposition="outside")
@@ -2305,7 +2323,7 @@ def drug_analytics_dashboard():
         st.caption("Полипрагмазия — когда пациент принимает 5 и более препаратов одновременно. Это повышает риск нежелательных взаимодействий.")
         
         poly_stats = {"1-2 препарата": 0, "3-4 препарата": 0, "5-6 препаратов": 0, "7+ препаратов": 0}
-        risk_by_age = {"До 40 лет": {"low": 0, "medium": 0, "high": 0}, 
+        risk_by_age = {"18-39 лет": {"low": 0, "medium": 0, "high": 0}, 
                        "40-65 лет": {"low": 0, "medium": 0, "high": 0},
                        "65+ лет": {"low": 0, "medium": 0, "high": 0}}
         
@@ -2323,7 +2341,7 @@ def drug_analytics_dashboard():
             else:
                 poly_stats["7+ препаратов"] += 1
             
-            age_grp = "До 40 лет" if pat_age < 40 else ("40-65 лет" if pat_age < 65 else "65+ лет")
+            age_grp = "18-39 лет" if pat_age < 40 else ("40-65 лет" if pat_age < 65 else "65+ лет")
             risk = "high" if n >= 7 else ("medium" if n >= 4 else "low")
             risk_by_age[age_grp][risk] += 1
         
@@ -2984,6 +3002,48 @@ def patient_dashboard():
 
         st.divider()
 
+        # ---- Кнопка сохранения всех приёмов за день ----
+        taken_keys_today = [
+            k for k in st.session_state
+            if k.startswith(f"taken_") and selected_day.isoformat() in k
+            and st.session_state[k] == True
+        ]
+        taken_count = len(taken_keys_today)
+
+        col_save, col_info = st.columns([0.35, 0.65])
+        with col_save:
+            if st.button(
+                f"Сохранить принятые ({taken_count})" if taken_count > 0 else "Сохранить принятые",
+                key=f"save_all_taken_{selected_day.isoformat()}",
+                use_container_width=True,
+                type="primary",
+                disabled=(taken_count == 0)
+            ):
+                # Записываем в intake_log все отмеченные
+                conn = sqlite3.connect(DB_NAME)
+                c = conn.cursor()
+                saved = 0
+                for presc in prescriptions:
+                    for slot_name in ["Утро", "День", "Вечер"]:
+                        tk = f"taken_{presc[0]}_{slot_name}_{selected_day.isoformat()}"
+                        if st.session_state.get(tk):
+                            c.execute(
+                                "INSERT OR IGNORE INTO intake_log (prescription_id, intake_date) VALUES (?,?)",
+                                (presc[0], selected_day.isoformat())
+                            )
+                            saved += 1
+                conn.commit()
+                conn.close()
+                st.success(f"Сохранено {saved} записей о приёме за {selected_day.strftime('%d.%m.%Y')}")
+        with col_info:
+            if taken_count > 0:
+                st.markdown(
+                    f"<div style='padding:0.45rem 0;color:#22C55E;font-size:0.88rem;'>"
+                    f"Отмечено принятыми: <strong>{taken_count}</strong> препарат(а)</div>",
+                    unsafe_allow_html=True
+                )
+
+
         # ---- Напоминания ----
         st.markdown("<h4 style='color:#0A2F6C;margin-top:1rem;'>Настройка напоминаний</h4>", unsafe_allow_html=True)
         col1, col2, col3 = st.columns(3)
@@ -3279,7 +3339,11 @@ def patient_dashboard():
         
         note = st.text_area("Заметки (необязательно):", placeholder="Напишите, как прошёл день...", height=70)
         
-        if st.button(" Сохранить оценку"):
+        # Показываем уведомление если было сохранение
+        if st.session_state.get('wellbeing_saved_msg'):
+            st.success(st.session_state.pop('wellbeing_saved_msg'))
+
+        if st.button("Сохранить оценку", type="primary", use_container_width=False):
             conn = sqlite3.connect(DB_NAME)
             c = conn.cursor()
             today_str = date.today().isoformat()
@@ -3288,7 +3352,8 @@ def patient_dashboard():
                      (pid, today_str, score, note))
             conn.commit()
             conn.close()
-            st.success(f"Оценка {score}/10 сохранена! ")
+            score_label_save = "Отлично" if score >= 9 else "Хорошо" if score >= 7 else "Нормально" if score >= 5 else "Плохо" if score >= 3 else "Очень плохо"
+            st.session_state['wellbeing_saved_msg'] = f"Оценка {score}/10 ({score_label_save}) сохранена за {date.today().strftime('%d.%m.%Y')}!"
             st.rerun()
         
         st.divider()
@@ -3607,7 +3672,6 @@ def patient_dashboard():
         # Вызываем чат с ассистентом
         ai_assistant_chat(pid, patient_info)
         
-        # end assistant tab
         # end assistant tab
     render_footer()
 
