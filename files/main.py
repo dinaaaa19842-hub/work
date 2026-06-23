@@ -1094,7 +1094,7 @@ def add_patient_page():
     )
     
     st.divider()
-    st.subheader("Препараты (опционально)")
+    st.subheader("Препараты")
     
     if 'new_patient_prescriptions_list' not in st.session_state:
         st.session_state['new_patient_prescriptions_list'] = []
@@ -1102,14 +1102,20 @@ def add_patient_page():
     items = st.session_state['new_patient_prescriptions_list']
     
     if items:
+        # Заголовки колонок
+        h1, h2, h3, h4 = st.columns([2.5, 1, 1.5, 0.5])
+        h1.markdown("<div style='font-size:0.82rem;color:#6B7280;font-weight:600;margin-bottom:0.1rem;'>Препарат</div>", unsafe_allow_html=True)
+        h2.markdown("<div style='font-size:0.82rem;color:#6B7280;font-weight:600;margin-bottom:0.1rem;'>Доза, мг</div>", unsafe_allow_html=True)
+        h3.markdown("<div style='font-size:0.82rem;color:#6B7280;font-weight:600;margin-bottom:0.1rem;'>Регулярность</div>", unsafe_allow_html=True)
         for idx, item in enumerate(items):
             col1, col2, col3, col4 = st.columns([2.5, 1, 1.5, 0.5])
-            drug = col1.text_input(f"Препарат", value=item[0], key=f"new_drug_{idx}")
-            dose = col2.text_input(f"мг", value=item[1], key=f"new_dose_{idx}")
-            reg = col3.text_input(f"Регулярность", value=item[2], key=f"new_reg_{idx}")
-            if col4.button("Удал.", key=f"del_new_{idx}"):
-                items.pop(idx)
-                st.rerun()
+            drug = col1.text_input("Препарат", value=item[0], key=f"new_drug_{idx}", label_visibility="collapsed")
+            dose = col2.text_input("мг", value=item[1], key=f"new_dose_{idx}", label_visibility="collapsed")
+            reg = col3.text_input("Регулярность", value=item[2], key=f"new_reg_{idx}", label_visibility="collapsed")
+            with col4:
+                if st.button("Удал.", key=f"del_new_{idx}", use_container_width=True):
+                    items.pop(idx)
+                    st.rerun()
             items[idx] = [drug, dose, reg]
     
     if st.button("+ Добавить препарат", key="add_new_drug"):
@@ -1195,14 +1201,20 @@ def doctor_edit_patient():
     
     items = st.session_state['edit_prescriptions_list']
     
+    if items:
+        h1, h2, h3, h4 = st.columns([2.5, 1, 1.5, 0.5])
+        h1.markdown("<div style='font-size:0.82rem;color:#6B7280;font-weight:600;margin-bottom:0.1rem;'>Препарат</div>", unsafe_allow_html=True)
+        h2.markdown("<div style='font-size:0.82rem;color:#6B7280;font-weight:600;margin-bottom:0.1rem;'>Доза, мг</div>", unsafe_allow_html=True)
+        h3.markdown("<div style='font-size:0.82rem;color:#6B7280;font-weight:600;margin-bottom:0.1rem;'>Регулярность</div>", unsafe_allow_html=True)
     for idx, item in enumerate(items):
         col1, col2, col3, col4 = st.columns([2.5, 1, 1.5, 0.5])
-        drug = col1.text_input(f"Препарат", value=item[0], key=f"drug_edit_{idx}")
-        dose = col2.text_input(f"мг", value=item[1], key=f"dose_edit_{idx}")
-        reg = col3.text_input(f"Регулярность", value=item[2], key=f"reg_edit_{idx}")
-        if col4.button("Удал.", key=f"del_edit_{idx}"):
-            items.pop(idx)
-            st.rerun()
+        drug = col1.text_input("Препарат", value=item[0], key=f"drug_edit_{idx}", label_visibility="collapsed")
+        dose = col2.text_input("мг", value=item[1], key=f"dose_edit_{idx}", label_visibility="collapsed")
+        reg = col3.text_input("Регулярность", value=item[2], key=f"reg_edit_{idx}", label_visibility="collapsed")
+        with col4:
+            if st.button("Удал.", key=f"del_edit_{idx}", use_container_width=True):
+                items.pop(idx)
+                st.rerun()
         items[idx] = [drug, dose, reg]
     
     if st.button("+ Добавить препарат"):
